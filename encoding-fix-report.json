@@ -1,0 +1,14 @@
+{
+  "fixedFiles": [
+    "public/script.js"
+  ],
+  "corrections": [
+    {
+      "file": "public/script.js",
+      "count": 544
+    }
+  ],
+  "convertedToUtf8": [
+    "public/script.js"
+  ]
+}
