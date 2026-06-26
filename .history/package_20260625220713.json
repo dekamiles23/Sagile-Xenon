@@ -1,0 +1,40 @@
+{
+  "name": "sagile-zx",
+  "version": "1.2.5",
+  "description": "Servidor Sagile ZX — Express + Socket.IO",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "dev": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "adm-zip": "^0.5.17",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "electron": "^42.3.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "win": {
+      "icon": "logo-icon.ico"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "server.js",
+      "public/**",
+      "node_modules/**"
+    ]
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

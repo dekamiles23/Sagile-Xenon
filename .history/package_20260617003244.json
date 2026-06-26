@@ -1,0 +1,58 @@
+{
+  "name": "mega-zx",
+  "version": "1.0.26",
+  "description": "Mega ZX",
+  "main": "main.js",
+  "productName": "Mega ZX",
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "build": {
+    "appId": "com.megazx.app",
+    "productName": "Mega ZX",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**/*",
+      "!node_modules/.cache/**/*",
+      "!node_modules/electron-builder/**/*",
+      "!node_modules/nodemon/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "logo-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Mega ZX",
+      "perMachine": true,
+      "runAfterFinish": true
+    }
+  },
+  "scripts": {
+    "server": "node server.js",
+    "start": "electron .",
+    "dev": "nodemon server.js",
+    "dist": "electron-builder",
+    "build-win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^4.18.2",
+    "multer": "^2.1.1",
+    "pg": "^8.21.0",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1",
+    "nodemon": "^3.0.2"
+  },
+  "keywords": []
+}

@@ -1,0 +1,92 @@
+/* Sistema de Conquistas - Estilo Minecraft Pixel Art */
+.achievement-popup {
+    position: fixed;
+    top: 20px;
+    right: -320px;
+    width: 280px;
+    background: #202020;
+    border: 3px solid #373737;
+    border-top-color: #5a5a5a;
+    border-left-color: #5a5a5a;
+    border-bottom-color: #1a1a1a;
+    border-right-color: #1a1a1a;
+    padding: 12px 16px;
+    z-index: 999999;
+    font-family: 'Courier New', monospace;
+    box-shadow: inset 0 0 0 2px #000000, 0 4px 12px rgba(0,0,0,0.6);
+    transition: right 0.4s ease-out;
+    user-select: none;
+    image-rendering: pixelated;
+}
+
+.achievement-popup.show {
+    right: 20px;
+}
+
+.achievement-popup-inner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.achievement-icon {
+    width: 40px;
+    height: 40px;
+    background: #3a3a3a;
+    border: 2px solid #505050;
+    border-top-color: #707070;
+    border-left-color: #707070;
+    border-bottom-color: #252525;
+    border-right-color: #252525;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.achievement-texts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.achievement-title {
+    color: #ffff00;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 1px 1px 0 #000000;
+    letter-spacing: 0.5px;
+    margin: 0;
+    padding: 0;
+}
+
+.achievement-name {
+    color: #ffffff;
+    font-size: 16px;
+    text-shadow: 1px 1px 0 #000000;
+    margin: 0;
+    padding: 0;
+}
+
+.achievement-popup::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+@keyframes achievementSlide {
+    0% { right: -320px; opacity: 0; }
+    15% { right: 20px; opacity: 1; }
+    85% { right: 20px; opacity: 1; }
+    100% { right: -320px; opacity: 0; }
+}
+
+.achievement-popup.animate {
+    animation: achievementSlide 4.5s ease-out forwards;
+}

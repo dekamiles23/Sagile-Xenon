@@ -1,0 +1,189 @@
+/**
+ * friends-fix-v6.js
+ * Correções definitivas do modal de amigos do ZX Chat:
+ *  1. Status em tempo real (Online / Ausente / Não Perturbe / Offline)
+ *  2. Detecção de inatividade → Ausente após 5 minutos
+ *  3. Heartbeat a cada 30 segundos (evita conexões zumbi)
+ *  4. Presença atualizada ao abrir o modal
+ *  5. Listeners sem duplicação; limpeza ao fechar modal
+ */
+
+(function () {
+  'use strict';
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     1. AGUARDAR SOCKET PRONTO
+  ──────────────────────────────────────────────────────────────────────────── */
+  function whenReady(fn) {
+    if (window.socket && window.socket.connected && window.username) {
+      fn();
+    } else {
+      var interval = setInterval(function () {
+        if (window.socket && window.socket.connected && window.username) {
+          clearInterval(interval);
+          fn();
+        }
+      }, 300);
+    }
+  }
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     2. DETECÇÃO DE INATIVIDADE (Ausente após 5 minutos sem atividade)
+  ──────────────────────────────────────────────────────────────────────────── */
+  var IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+  var _idleTimer = null;
+  var _isIdle = false;
+
+  function _getManualStatus() {
+    return localStorage.getItem('zx_user_status') || 'online';
+  }
+
+  function _setPresenceStatus(status) {
+    if (!window.socket || !window.socket.connected) return;
+    window.socket.emit('user:status', { status: status, username: window.username });
+  }
+
+  function _onUserActive() {
+    if (_isIdle) {
+      _isIdle = false;
+      var prev = _getManualStatus();
+      if (prev !== 'dnd' && prev !== 'invisible') {
+        _setPresenceStatus(prev || 'online');
+      }
+    }
+    clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(_onUserIdle, IDLE_TIMEOUT_MS);
+  }
+
+  function _onUserIdle() {
+    var manual = _getManualStatus();
+    if (manual === 'dnd' || manual === 'invisible') return;
+    _isIdle = true;
+    _setPresenceStatus('idle');
+  }
+
+  var _activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+
+  function _initIdleDetection() {
+    _activityEvents.forEach(function (evt) {
+      document.addEventListener(evt, _onUserActive, { passive: true });
+    });
+    _idleTimer = setTimeout(_onUserIdle, IDLE_TIMEOUT_MS);
+  }
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     3. HEARTBEAT A CADA 30 SEGUNDOS
+  ──────────────────────────────────────────────────────────────────────────── */
+  function _startHeartbeat() {
+    setInterval(function () {
+      if (!window.socket || !window.socket.connected) return;
+      var currentStatus = _isIdle ? 'idle' : _getManualStatus();
+      window.socket.emit('user:heartbeat', { status: currentStatus });
+    }, 30000);
+  }
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     4. ATUALIZAR PRESENÇA AO ABRIR O MODAL DE AMIGOS
+  ──────────────────────────────────────────────────────────────────────────── */
+  function _patchFriendsModalOpen() {
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-modal="friends-modal"]') ||
+                e.target.closest('#nav-friends') ||
+                e.target.closest('#nav-friends-dm') ||
+                e.target.closest('#nav-friends-sidebar');
+      if (btn) {
+        if (window.socket && window.socket.connected) {
+          window.socket.emit('presence:request');
+        }
+      }
+    }, true);
+
+    var modal = document.getElementById('friends-modal');
+    if (modal && window.MutationObserver) {
+      var _wasHidden = true;
+      new MutationObserver(function () {
+        var isVisible = !modal.classList.contains('hidden');
+        if (isVisible && _wasHidden) {
+          if (window.socket && window.socket.connected) {
+            window.socket.emit('presence:request');
+          }
+          _wasHidden = false;
+          // Garantir que o painel fa-add seja limpo ao abrir o modal
+          // para que o input seja recriado com estado fresco
+          var addPane = document.getElementById('fa-add');
+          if (addPane) {
+            var activeTab = document.querySelector('.mm-tab.active');
+            // Se o usuário não estiver na aba "Adicionar amigo", limpar o painel
+            // para que renderAddFriend() crie um input novo e limpo na próxima vez
+            if (!activeTab || activeTab.dataset.tab !== 'fa-add') {
+              var existingInput = addPane.querySelector('#friend-add-input');
+              if (existingInput && !existingInput.value) {
+                // Limpar o painel para forçar recriação do input na próxima abertura
+                addPane.innerHTML = '';
+              }
+            }
+          }
+        } else if (!isVisible) {
+          _wasHidden = true;
+        }
+      }).observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+    }
+  }
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     5. MÚLTIPLAS ABAS — sincronizar via BroadcastChannel + visibilitychange
+  ──────────────────────────────────────────────────────────────────────────── */
+  function _initMultiTabSync() {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        if (window.socket && window.socket.connected) {
+          window.socket.emit('presence:request');
+        }
+        _onUserActive();
+      }
+    });
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      var bc = new BroadcastChannel('zx_presence_sync');
+      window.addEventListener('beforeunload', function () {
+        try { bc.postMessage({ type: 'tab_closing', username: window.username }); } catch (_) {}
+      });
+      bc.onmessage = function (evt) {
+        if (evt.data && evt.data.type === 'tab_closing') {
+          setTimeout(function () {
+            if (window.socket && window.socket.connected) {
+              window.socket.emit('presence:request');
+            }
+          }, 1500);
+        }
+      };
+    }
+  }
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     6. GARANTIR LISTENERS DE PRESENÇA SEM DUPLICAÇÃO
+  ──────────────────────────────────────────────────────────────────────────── */
+  function _ensurePresenceListeners() {
+    if (window.socket && !window.socket._v6PresencePatch) {
+      window.socket._v6PresencePatch = true;
+      window.socket.on('friend:status', function () {
+        if (typeof window.renderDmList === 'function') window.renderDmList();
+      });
+    }
+  }
+
+  /* ────────────────────────────────────────────────────────────────────────────
+     INICIALIZAÇÃO
+  ──────────────────────────────────────────────────────────────────────────── */
+  _patchFriendsModalOpen();
+  _initMultiTabSync();
+
+  whenReady(function () {
+    _initIdleDetection();
+    _startHeartbeat();
+    _ensurePresenceListeners();
+    window.socket.emit('presence:request');
+    console.log('[friends-fix-v6] Inicializado — idle detection, heartbeat e presença ativa.');
+  });
+
+})();

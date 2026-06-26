@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: mega-zx-server
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        value: https://mescdtlvpqblhlqtvnlm.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        value: sb_secret_GEsYmczQKJip2Ejvj7N06A_WFHHjXRq

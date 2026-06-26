@@ -1,0 +1,124 @@
+/* ================================================
+   REMOÇÃO DAS ABAS CATEGORIAS, EMOJIS E FIGURINHAS
+   DO MODAL DE CONFIGURAÇÃO DE SERVIDOR
+   ================================================ */
+
+/* Ocultar abas de Categorias, Emojis e Figurinhas no modal de configurações */
+.srv-ms-nav button[data-srv-section="categorias"],
+.srv-ms-nav button[data-srv-section="emojis"],
+.srv-ms-nav button[data-srv-section="figurinhas"],
+.srv-ms-nav button[data-srv-section="stickers"],
+.srv-ms-nav button[data-srv-section="emoji"],
+.srv-ms-nav button[data-srv-section="categoria"],
+.srv-ms-nav button[data-srv-section="canais-categorias"],
+.srv-ms-nav button[data-srv-section="server-categories"] {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Ocultar também a categoria de menu que contém essas abas */
+.srv-ms-nav .ms-nav-category:has(+ button[data-srv-section="categorias"]),
+.srv-ms-nav .ms-nav-category:has(+ button[data-srv-section="emojis"]),
+.srv-ms-nav .ms-nav-category:has(+ button[data-srv-section="figurinhas"]) {
+    display: none !important;
+}
+
+/* REMOVER COMPLETAMENTE A PÁGINA INTEIRA DE CATEGORIAS */
+#srv-ms-content [data-section="categorias"],
+#srv-ms-content [data-srv-section="categorias"],
+#srv-ms-content .categories-section,
+#srv-ms-content #categories-section,
+#srv-ms-content:has(h2:contains("CATEGORIAS")),
+#srv-ms-content *:has(> h2:contains("CATEGORIAS")) {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Ocultar também o conteúdo da seção quando ela for ativada */
+#srv-ms-content .categories-list,
+#srv-ms-content .categories-container,
+#srv-ms-content #categories-list {
+    display: none !important;
+}
+
+/* Garantir que o modal de CRIAR CATEGORIA fique em destaque e na frente */
+#server-settings-modal #create-category-modal,
+#server-settings-modal .create-category-modal,
+#server-settings-modal [id*="criar-categoria"],
+#server-settings-modal [id*="nova-categoria"] {
+    display: flex !important;
+    z-index: 99999 !important;
+    opacity: 1 !important;
+    pointer-events: all !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+}
+
+/* Ocultar APENAS o fundo do modal de configurações quando o modal de categoria estiver aberto */
+#server-settings-modal:has(#create-category-modal:not(.hidden)),
+#server-settings-modal:has(.create-category-modal:not(.hidden)) {
+    background: rgba(0,0,0,0.85) !important;
+}
+
+/* Ocultar o conteúdo do modal de configurações quando o modal de categoria estiver aberto */
+#server-settings-modal:has(#create-category-modal:not(.hidden)) .modal-server-settings,
+#server-settings-modal:has(.create-category-modal:not(.hidden)) .modal-server-settings {
+    opacity: 0.2 !important;
+    pointer-events: none !important;
+    filter: blur(8px) !important;
+}
+
+/* ================================================
+   REMOVER BARRA DE NAVEGAÇÃO DO SERVER-VIEW
+   ================================================ */
+body.server-body .navbar {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    top: -9999px !important;
+    left: -9999px !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+}
+
+/* Ajustar layout para ocupar todo o espaço sem a navbar */
+body.server-body {
+    padding-top: 0 !important;
+}
+
+body.server-body .layout {
+    height: 100vh !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* ================================================
+   POSICIONAR BOTÃO DE SETA
+   ================================================ */
+body.server-body #toggle-online-sidebar {
+    top: 80px !important;
+    transform: none !important;
+    height: 40px !important;
+    right: 16px !important;
+    position: fixed !important;
+}
+
+body.server-body .online-sidebar.collapsed #toggle-online-sidebar {
+    top: 80px !important;
+    right: 0 !important;
+}

@@ -377,9 +377,7 @@ io.on('connection', (socket) => {
     const to   = data?.to;
     if (!from || !to) return;
     console.log('[FRIEND] request from=' + from + ' to=' + to);
-    console.log('[FRIEND] Usuários online:', Object.keys(users).map(sid => users[sid].username));
     const toSid = findSocket(to);
-    console.log('[FRIEND] Socket do destinatário (' + to + '):', toSid);
     // Confirma para quem enviou
     socket.emit('friend:request:sent', { to, offline: !toSid });
     // Encaminha para o destinatário (se online)
@@ -398,19 +396,16 @@ io.on('connection', (socket) => {
     console.log('[FRIEND] accept from=' + from + ' to=' + to);
     // Persiste amizade no Supabase
     await supabaseBackend.addFriendship(from, to);
-    console.log('[FRIEND] Amizade salva no Supabase entre', from, 'e', to);
     // Notifica o outro usuário
     const toSid = findSocket(to);
     if (toSid) {
       io.to(toSid).emit('friend:accepted', { by: from, avatar: data?.avatar || null });
       // Envia lista atualizada para o outro usuário também
       const toFriends = await supabaseBackend.getFriends(to.toLowerCase());
-      console.log('[FRIEND] Enviando lista de amigos para', to, ':', toFriends);
       io.to(toSid).emit('friends:loaded', { friends: toFriends });
     }
     // Envia lista atualizada para quem aceitou (para refletir imediatamente sem depender do localStorage)
     const fromFriends = await supabaseBackend.getFriends(from.toLowerCase());
-    console.log('[FRIEND] Enviando lista de amigos para', from, ':', fromFriends);
     socket.emit('friends:loaded', { friends: fromFriends });
   });
 

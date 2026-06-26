@@ -1,0 +1,326 @@
+/* ================================================
+   REMOÇÃO DAS ABAS CATEGORIAS, EMOJIS E FIGURINHAS
+   DO MODAL DE CONFIGURAÇÃO DE SERVIDOR
+   ================================================ */
+
+/* Ocultar abas de Categorias, Emojis e Figurinhas no modal de configurações */
+.srv-ms-nav button[data-srv-section="categorias"],
+.srv-ms-nav button[data-srv-section="emojis"],
+.srv-ms-nav button[data-srv-section="figurinhas"],
+.srv-ms-nav button[data-srv-section="stickers"],
+.srv-ms-nav button[data-srv-section="emoji"],
+.srv-ms-nav button[data-srv-section="categoria"],
+.srv-ms-nav button[data-srv-section="canais-categorias"],
+.srv-ms-nav button[data-srv-section="server-categories"] {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Ocultar também a categoria de menu que contém essas abas */
+.srv-ms-nav .ms-nav-category:has(+ button[data-srv-section="categorias"]),
+.srv-ms-nav .ms-nav-category:has(+ button[data-srv-section="emojis"]),
+.srv-ms-nav .ms-nav-category:has(+ button[data-srv-section="figurinhas"]) {
+    display: none !important;
+}
+
+/* REMOVER COMPLETAMENTE A PÁGINA INTEIRA DE CATEGORIAS */
+#srv-ms-content [data-section="categorias"],
+#srv-ms-content [data-srv-section="categorias"],
+#srv-ms-content .categories-section,
+#srv-ms-content #categories-section,
+#srv-ms-content:has(h2:contains("CATEGORIAS")),
+#srv-ms-content *:has(> h2:contains("CATEGORIAS")) {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Ocultar também o conteúdo da seção quando ela for ativada */
+#srv-ms-content .categories-list,
+#srv-ms-content .categories-container,
+#srv-ms-content #categories-list {
+    display: none !important;
+}
+
+/* Garantir que o modal de CRIAR CATEGORIA fique em destaque e na frente */
+#server-settings-modal #create-category-modal,
+#server-settings-modal .create-category-modal,
+#server-settings-modal [id*="criar-categoria"],
+#server-settings-modal [id*="nova-categoria"] {
+    display: flex !important;
+    z-index: 99999 !important;
+    opacity: 1 !important;
+    pointer-events: all !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+}
+
+/* Ocultar APENAS o fundo do modal de configurações quando o modal de categoria estiver aberto */
+#server-settings-modal:has(#create-category-modal:not(.hidden)),
+#server-settings-modal:has(.create-category-modal:not(.hidden)) {
+    background: rgba(0,0,0,0.85) !important;
+}
+
+/* Ocultar o conteúdo do modal de configurações quando o modal de categoria estiver aberto */
+#server-settings-modal:has(#create-category-modal:not(.hidden)) .modal-server-settings,
+#server-settings-modal:has(.create-category-modal:not(.hidden)) .modal-server-settings {
+    opacity: 0.2 !important;
+    pointer-events: none !important;
+    filter: blur(8px) !important;
+}
+
+/* ================================================
+   NAVBAR NO SERVER-VIEW
+   A navbar permanece visível no server-view, mas
+   fica fixa no topo da área principal (main-area)
+   ================================================ */
+body.server-body .main-area > .navbar {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    position: sticky !important;
+    top: 0 !important;
+    width: 100% !important;
+    z-index: 20 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* Ao sair do server-view, restaurar navbar */
+body:not(.server-body) .main-area > .navbar {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    height: auto !important;
+    width: 100% !important;
+    pointer-events: auto !important;
+}
+
+/* Ajustar layout para ocupar todo o espaço sem a navbar */
+body.server-body {
+    padding-top: 0 !important;
+}
+
+body.server-body .layout {
+    height: 100vh !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* Garantir que a barra inferior de navegação permaneça clicável no server-view */
+body.server-body .servers-rail,
+.servers-rail {
+    z-index: 2147483646 !important;
+    pointer-events: auto !important;
+}
+
+body.server-body .servers-rail .server-rail-icon {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+/* ================================================
+   POSICIONAR BOTÃO DE SETA
+   ================================================ */
+body.server-body #toggle-online-sidebar {
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    height: 40px !important;
+    right: 220px !important;
+    position: fixed !important;
+}
+
+body.server-body .online-sidebar.collapsed #toggle-online-sidebar {
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    right: 0 !important;
+}
+
+
+/* ================================================
+   ✅ CORREÇÃO: VOICE VIEW - LAYOUT CORRETO
+   Garante que a tela de chamada preenche toda a área disponível
+   ================================================ */
+
+/* Voice view como layout de servidor (com sidebar de canais) */
+body.server-body #voice-view:not(.hidden) {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+}
+
+/* Área principal da chamada ocupa todo o espaço */
+body.server-body #voice-view .main-content.voice-content,
+#voice-view .main-content.voice-content {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+}
+
+/* voice-room preenche o espaço entre o header e os controles */
+body.server-body .voice-room,
+#voice-view .voice-room {
+    flex: 1 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    position: relative !important;
+    padding: 0 !important;
+}
+
+/* Grid de participantes ocupa toda a área */
+body.server-body .voice-participants-grid,
+#voice-view .voice-participants-grid {
+    flex: 1 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 1.25rem !important;
+    padding: 1.5rem !important;
+    align-items: center !important;
+    justify-content: center !important;
+    align-content: flex-start !important;
+    overflow-y: auto !important;
+}
+
+/* Participante - card estilo Discord */
+body.server-body .voice-participant,
+#voice-view .voice-participant {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 0.6rem !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+    border: 3px solid #80848e !important;
+    border-radius: 14px !important;
+    padding: 1.25rem 1.5rem !important;
+    min-width: 130px !important;
+    max-width: 180px !important;
+    transition: all 0.15s ease !important;
+    position: relative !important;
+    cursor: default !important;
+}
+
+/* Controles da chamada sempre visíveis no rodapé */
+body.server-body .voice-controls,
+#voice-view .voice-controls {
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+    border-top: 1px solid rgba(255, 0, 255, 0.2) !important;
+    background: rgba(0, 0, 0, 0.25) !important;
+    position: relative !important;
+    z-index: 10 !important;
+}
+
+/* Janela flutuante da chamada persistente */
+.voice-floating-window {
+    position: fixed !important;
+    bottom: 80px !important;
+    right: 20px !important;
+    background: rgba(18, 18, 26, 0.95) !important;
+    border: 1px solid rgba(255, 0, 255, 0.5) !important;
+    border-radius: 12px !important;
+    padding: 10px 14px !important;
+    z-index: 2147483640 !important;
+    min-width: 200px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 0, 255, 0.2) !important;
+    backdrop-filter: blur(10px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+}
+
+.voice-floating-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.voice-floating-participants {
+    color: rgba(255, 0, 255, 0.8);
+    font-size: 11px;
+}
+
+.voice-floating-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+}
+
+.voice-floating-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 0, 255, 0.35);
+    background: rgba(255, 0, 255, 0.1);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.voice-floating-btn:hover {
+    background: rgba(255, 0, 255, 0.25);
+    border-color: #ff00ff;
+}
+
+.voice-floating-btn.active {
+    background: #ff00ff;
+    color: #000;
+}
+
+.voice-floating-btn.active-screen {
+    background: #57f287;
+    color: #000;
+    border-color: #57f287;
+}
+
+.voice-floating-leave {
+    background: #ed4245 !important;
+    border-color: #ed4245 !important;
+    color: #fff !important;
+}
+
+.voice-floating-leave:hover {
+    background: #c0392b !important;
+}

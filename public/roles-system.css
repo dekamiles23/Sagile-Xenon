@@ -1,0 +1,436 @@
+/* ================================================
+   SISTEMA DE CARGOS E PERMISSÕES - ESTILOS
+   Estilo Discord Dark Theme
+   ================================================ */
+
+/* Container principal de configurações de cargos */
+.roles-settings-panel {
+  display: flex;
+  height: 100%;
+  background: #1e1e2e;
+  color: #dcddde;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Lista lateral de cargos */
+.roles-list-container {
+  width: 240px;
+  background: #2b2d31;
+  border-right: 1px solid #1f2023;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.roles-list-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #949ba4;
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+}
+
+.role-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
+}
+
+.role-list-item:hover {
+  background: #35373c;
+}
+
+.role-list-item.active {
+  background: #404249;
+}
+
+.role-list-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.role-icon {
+  font-size: 16px;
+}
+
+.role-name {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.role-members-count {
+  font-size: 12px;
+  color: #949ba4;
+}
+
+.role-list-item.add-role {
+  color: #00a8fc;
+  border-left: 3px solid #00a8fc !important;
+  margin-top: 8px;
+}
+
+.role-list-item.add-role:hover {
+  background: rgba(0, 168, 252, 0.1);
+}
+
+.add-icon {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Editor de cargo */
+.roles-editor-container {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.role-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #3f4147;
+}
+
+.role-color-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.role-info h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.role-position {
+  font-size: 13px;
+  color: #949ba4;
+}
+
+/* Seções de configurações */
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 0;
+  user-select: none;
+}
+
+.toggle-arrow {
+  transition: transform 0.2s ease;
+  font-size: 12px;
+  color: #949ba4;
+}
+
+.toggle-arrow.open {
+  transform: rotate(90deg);
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #3f4147;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.setting-input {
+  background: #1e1f22;
+  border: 1px solid #3f4147;
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: #dcddde;
+  font-size: 14px;
+  width: 220px;
+  outline: none;
+}
+
+.setting-input:focus {
+  border-color: #5865f2;
+}
+
+.icon-input {
+  width: 80px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.color-picker-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-picker-container input[type="color"] {
+  width: 40px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.color-hex {
+  font-family: monospace;
+  font-size: 13px;
+  color: #949ba4;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #3f4147;
+  transition: .2s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .2s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: #5865f2;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* Categorias de permissões */
+.permission-category {
+  margin-bottom: 20px;
+  background: #2b2d31;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.permission-category-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #35373c;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.category-icon {
+  font-size: 16px;
+}
+
+.permission-list {
+  padding: 8px 0;
+}
+
+.permission-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid #35373c;
+}
+
+.permission-row:last-child {
+  border-bottom: none;
+}
+
+.permission-info {
+  flex: 1;
+}
+
+.permission-name {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.permission-desc {
+  font-size: 12px;
+  color: #949ba4;
+}
+
+/* Botões de ação */
+.role-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid #3f4147;
+}
+
+.btn {
+  padding: 10px 24px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: #5865f2;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #4752c4;
+}
+
+.btn-danger {
+  background: transparent;
+  color: #ed4245;
+  border: 1px solid #ed4245;
+}
+
+.btn-danger:hover {
+  background: rgba(237, 66, 69, 0.1);
+}
+
+/* Estado vazio */
+.roles-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #949ba4;
+}
+
+.roles-empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+/* ================================================
+   DESTAQUE DE CARGOS NA BARRA LATERAL
+   ================================================ */
+
+.user-highlighted {
+  background: rgba(88, 101, 242, 0.1) !important;
+  border-radius: 6px;
+  margin: 2px 0;
+}
+
+.user-highlighted .user-name {
+  font-weight: 700 !important;
+}
+
+.role-badge {
+  margin-left: 6px;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+/* ================================================
+   AJUSTE DA SETA DO PAINEL PESSOAS ONLINE
+   ================================================ */
+
+.online-sidebar-header {
+  position: relative;
+}
+
+.online-sidebar-toggle {
+  position: absolute;
+  right: -28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  background: #2b2d31;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 100;
+  border: 1px solid #3f4147;
+}
+
+.online-sidebar-toggle:hover {
+  background: #35373c;
+}
+
+.online-sidebar-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.online-sidebar.collapsed .online-sidebar-toggle svg {
+  transform: rotate(180deg);
+}
+
+/* ================================================
+   ANIMAÇÕES
+   ================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.advanced-content, .permissions-content {
+  animation: fadeIn 0.2s ease;
+}

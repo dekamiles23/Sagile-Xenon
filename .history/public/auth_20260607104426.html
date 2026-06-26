@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ZX Chat - Autenticação</title>
+  <link rel="stylesheet" href="style.css" />
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: linear-gradient(135deg, #0a0012, #1a002b, #0a0012);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+      overflow-x: hidden;
+    }
+    
+    .modal-auth {
+      max-width: 420px;
+      width: 90vw;
+      background: rgba(10, 0, 18, 0.95);
+      border: 1px solid #ff00ff;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 0 40px rgba(255, 0, 255, 0.3);
+      animation: authOpen 0.3s ease-out;
+    }
+    
+    @keyframes authOpen {
+      from { opacity: 0; transform: translateY(20px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    
+    .modal-logo {
+      font-size: 64px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    
+    .modal-auth h2 {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    
+    .modal-auth p {
+      text-align: center;
+      color: #aaa;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .auth-form input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,0,255,0.3);
+      border-radius: 8px;
+      color: #fff;
+      outline: none;
+      font-size: 14px;
+      transition: all 0.15s;
+    }
+    
+    .auth-form input:focus {
+      border-color: #00ffff;
+      box-shadow: 0 0 10px rgba(0,255,255,0.2);
+    }
+    
+    .auth-form input::placeholder {
+      color: #888;
+    }
+    
+    .auth-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 4px;
+      cursor: pointer;
+      color: #aaa;
+      font-size: 13px;
+      user-select: none;
+    }
+    
+    .auth-checkbox input[type="checkbox"] {
+      width: auto;
+      cursor: pointer;
+    }
+    
+    .auth-btn {
+      margin-top: 8px;
+      width: 100%;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #ff00ff, #00ffff);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .auth-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 20px rgba(255, 0, 255, 0.4);
+    }
+    
+    .auth-switch {
+      margin-top: 16px;
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .auth-link-btn {
+      background: transparent;
+      border: none;
+      color: #00ffff;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0;
+      margin-left: 4px;
+    }
+    
+    .auth-link-btn:hover {
+      text-decoration: underline;
+    }
+    
+    .auth-error {
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(255,0,0,0.15);
+      border: 1px solid rgba(255,0,0,0.3);
+      border-radius: 8px;
+      color: #ff6666;
+      font-size: 13px;
+      text-align: center;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    .age-notice {
+      color: #888;
+      font-size: 11px;
+      margin-top: -8px;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="modal-auth">
+  <div class="modal-logo">🔐</div>
+  <h2 id="auth-title">Criar Conta</h2>
+  <p id="auth-subtitle">Preencha os dados para se registrar</p>
+  
+  <div class="auth-form">
+    <input id="auth-nick" type="text" placeholder="Seu apelido / Nickname" maxlength="20" />
+    <input id="auth-email" type="email" placeholder="Email válido" />
+    <input id="auth-birthdate" type="date" placeholder="Data de nascimento" />
+    <div class="age-notice">⚠ Você precisa ter pelo menos 14 anos para se registrar</div>
+    <input id="auth-phone" type="tel" placeholder="Número de telefone (opcional)" />
+    <input id="auth-password" type="password" placeholder="Senha (mínimo 6 caracteres)" />
+    <input id="auth-password-confirm" type="password" placeholder="Confirmar senha" />
+    
+    <label class="auth-checkbox">
+      <input type="checkbox" id="auth-terms" />
+      <span>Concordo com os termos de privacidade e proteção de dados</span>
+    </label>
+    
+    <button id="auth-submit-btn" class="auth-btn">📝 Registrar-se</button>
+    
+    <div class="auth-switch">
+      <span>Já tem uma conta?</span>
+      <button id="auth-switch-btn" class="auth-link-btn">Fazer Login</button>
+    </div>
+  </div>
+  
+  <div id="auth-error" class="auth-error hidden"></div>
+</div>
+
+<script>
+  let isLoginMode = false;
+  
+  function updateAuthMode() {
+    if (isLoginMode) {
+      document.getElementById('auth-title').textContent = 'Fazer Login';
+      document.getElementById('auth-subtitle').textContent = 'Entre com sua conta';
+      document.getElementById('auth-nick').style.display = 'none';
+      document.getElementById('auth-birthdate').style.display = 'none';
+      document.querySelector('.age-notice').style.display = 'none';
+      document.getElementById('auth-phone').style.display = 'none';
+      document.getElementById('auth-password-confirm').style.display = 'none';
+      document.getElementById('auth-terms').parentElement.style.display = 'none';
+      document.getElementById('auth-submit-btn').textContent = '🔑 Entrar';
+      document.getElementById('auth-switch-btn').textContent = 'Criar Conta';
+    } else {
+      document.getElementById('auth-title').textContent = 'Criar Conta';
+      document.getElementById('auth-subtitle').textContent = 'Preencha os dados para se registrar';
+      document.getElementById('auth-nick').style.display = 'block';
+      document.getElementById('auth-birthdate').style.display = 'block';
+      document.querySelector('.age-notice').style.display = 'block';
+      document.getElementById('auth-phone').style.display = 'block';
+      document.getElementById('auth-password-confirm').style.display = 'block';
+      document.getElementById('auth-terms').parentElement.style.display = 'flex';
+      document.getElementById('auth-submit-btn').textContent = '📝 Registrar-se';
+      document.getElementById('auth-switch-btn').textContent = 'Fazer Login';
+    }
+  }
+  
+  // Alternar entre Login e Registro
+  document.getElementById('auth-switch-btn').addEventListener('click', () => {
+    isLoginMode = !isLoginMode;
+    updateAuthMode();
+    document.getElementById('auth-error').classList.add('hidden');
+  });
+  
+  // Botão de Submeter
+  document.getElementById('auth-submit-btn').addEventListener('click', () => {
+    const errorEl = document.getElementById('auth-error');
+    errorEl.classList.add('hidden');
+    
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value.trim();
+    
+    if (!email) {
+      errorEl.textContent = 'Digite um email válido';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    
+    if (!password || password.length < 6) {
+      errorEl.textContent = 'A senha precisa ter no mínimo 6 caracteres';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    
+    if (!isLoginMode) {
+      // Modo Registro
+      const nick = document.getElementById('auth-nick').value.trim();
+      const birthdate = document.getElementById('auth-birthdate').value;
+      const passwordConfirm = document.getElementById('auth-password-confirm').value.trim();
+      const termsAccepted = document.getElementById('auth-terms').checked;
+      
+      if (!nick) {
+        errorEl.textContent = 'Digite seu apelido';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      
+      if (password !== passwordConfirm) {
+        errorEl.textContent = 'As senhas não coincidem';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      
+      if (!termsAccepted) {
+        errorEl.textContent = 'Você precisa concordar com os termos de privacidade';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      
+      // ✅ Validação de idade mínima 14 anos
+      if (birthdate) {
+        const birthDate = new Date(birthdate);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        
+        if (age < 14) {
+          errorEl.textContent = 'Você precisa ter pelo menos 14 anos para se registrar';
+          errorEl.classList.remove('hidden');
+          return;
+        }
+      }
+      
+      // Gerar código de amigo único
+      const friendCode = 'ZX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      // Salvar dados do usuário
+      const userData = {
+        nick,
+        email,
+        birthdate,
+        phone: document.getElementById('auth-phone').value.trim(),
+        friendCode,
+        registeredAt: Date.now()
+      };
+      
+      localStorage.setItem('zx_user_data', JSON.stringify(userData));
+      localStorage.setItem('zx_username', nick);
+      localStorage.setItem('zx_session', 'authenticated');
+    } else {
+      // Modo Login
+      const savedData = localStorage.getItem('zx_user_data');
+      if (!savedData) {
+        errorEl.textContent = 'Nenhuma conta encontrada com este email';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      
+      const userData = JSON.parse(savedData);
+      localStorage.setItem('zx_username', userData.nick);
+      localStorage.setItem('zx_session', 'authenticated');
+    }
+    
+    // Redirecionar para o aplicativo
+    window.location.href = 'index.html';
+  });
+  
+  // Verificar se já está logado
+  if (localStorage.getItem('zx_session') === 'authenticated') {
+    window.location.href = 'index.html';
+  }
+</script>
+
+</body>
+</html>

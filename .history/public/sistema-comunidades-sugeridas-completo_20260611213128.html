@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Comunidades Sugeridas - COMPLETO</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: #0a0012;
+            color: #fff;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            color: #00ffff;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        /* ✅ SISTEMA DE COMUNIDADES SUGERIDAS */
+        #suggested-communities-container {
+            display: flex;
+            gap: 16px;
+            overflow-x: auto;
+            padding-bottom: 12px;
+            margin-bottom: 40px;
+            scrollbar-width: thin;
+            scrollbar-color: #00ffff rgba(0,0,0,0.2);
+        }
+
+        /* ✅ CARD VAZIO PADRÃO */
+        #suggested-empty-state {
+            min-width: 220px;
+            height: 280px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 0, 255, 0.3);
+            cursor: default;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        #suggested-empty-state > div {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(128, 0, 255, 0.2), rgba(0, 0, 0, 0.8));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        #suggested-empty-state .icon {
+            font-size: 48px;
+            opacity: 0.5;
+        }
+
+        #suggested-empty-state .text {
+            color: #888;
+            font-size: 14px;
+        }
+
+        /* ✅ CARD DA COMUNIDADE */
+        .community-card {
+            min-width: 220px;
+            height: 280px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 0, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .community-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255, 0, 255, 0.6);
+            box-shadow: 0 10px 30px rgba(255, 0, 255, 0.2);
+        }
+
+        .community-card .banner {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .community-card .overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.9));
+            padding: 20px 16px 16px 16px;
+        }
+
+        .community-card .icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            border: 2px solid rgba(255,0,255,0.5);
+        }
+
+        .community-card .name {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .community-card .members {
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        /* ✅ MINHAS COMUNIDADES */
+        #my-communities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        /* ✅ MENU DE CONTEXTO */
+        .community-context-menu {
+            position: fixed;
+            z-index: 999999;
+            background: #12121a;
+            border: 1px solid #ff00ff;
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 200px;
+            box-shadow: 0 0 25px rgba(255, 0, 255, 0.3);
+        }
+
+        .community-context-menu .ctx-item {
+            width: 100%;
+            text-align: left;
+            padding: 10px 12px;
+            background: transparent;
+            border: none;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .community-context-menu .ctx-item:hover {
+            background: rgba(255, 0, 255, 0.15);
+        }
+
+        .community-context-menu .ctx-divider {
+            height: 1px;
+            background: rgba(255, 0, 255, 0.2);
+            margin: 4px 0;
+        }
+
+        .community-context-menu .ctx-danger {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ✅ SEÇÃO: COMUNIDADES SUGERIDAS -->
+    <div class="section-header">
+        <h2>✨ COMUNIDADES SUGERIDAS</h2>
+    </div>
+
+    <div id="suggested-communities-container">
+        <!-- ✅ CARD VAZIO PADRÃO - SERÁ SUBSTITUIDO AUTOMATICAMENTE -->
+        <div id="suggested-empty-state">
+            <div>
+                <div class="icon">🌐</div>
+                <div class="text">Nenhuma comunidade ainda</div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ✅ SEÇÃO: MINHAS COMUNIDADES -->
+    <div class="section-header">
+        <h2>🏠 MINHAS COMUNIDADES</h2>
+    </div>
+
+    <div id="my-communities-grid">
+        <!-- Comunidades serão renderizadas aqui -->
+    </div>
+
+</div>
+
+
+<script>
+    // ================================================
+    // ✅ SISTEMA COMPLETO E FUNCIONAL 100%
+    // ================================================
+
+    // Dados de exemplo - você pode substituir pelos seus dados reais
+    const userCommunities = [
+        {
+            id: 'comm_1',
+            name: 'Comunidade de Jogos',
+            members: 124,
+            banner: 'https://picsum.photos/id/237/400/500',
+            icon: 'https://picsum.photos/id/1/100/100'
+        },
+        {
+            id: 'comm_2',
+            name: 'Comunidade de Tecnologia',
+            members: 89,
+            banner: 'https://picsum.photos/id/0/400/500',
+            icon: 'https://picsum.photos/id/2/100/100'
+        },
+        {
+            id: 'comm_3',
+            name: 'Comunidade de Música',
+            members: 67,
+            banner: 'https://picsum.photos/id/96/400/500',
+            icon: 'https://picsum.photos/id/3/100/100'
+        }
+    ];
+
+    // ================================================
+    // 1. RENDERIZAR MINHAS COMUNIDADES
+    // ================================================
+    function renderUserCommunities() {
+        const grid = document.getElementById('my-communities-grid');
+        grid.innerHTML = '';
+
+        userCommunities.forEach(community => {
+            const communityCard = document.createElement('div');
+            communityCard.className = 'community-card';
+            communityCard.dataset.communityId = community.id;
+
+            communityCard.innerHTML = `
+                <img class="banner" src="${community.banner}" alt="${community.name}" />
+                <div class="overlay">
+                    <img class="icon" src="${community.icon}" alt="" />
+                    <div class="name">${community.name}</div>
+                    <div class="members">${community.members} membros</div>
+                </div>
+            `;
+
+            // ✅ 2. EVENTO CLIQUE COM BOTÃO DIREITO
+            communityCard.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Fecha qualquer menu aberto
+                document.querySelectorAll('.community-context-menu').forEach(m => m.remove());
+
+                // ✅ 3. CRIA MENU DE CONTEXTO PERSONALIZADO
+                const ctxMenu = document.createElement('div');
+                ctxMenu.className = 'community-context-menu';
+                ctxMenu.style.left = e.clientX + 'px';
+                ctxMenu.style.top = e.clientY + 'px';
+
+                ctxMenu.innerHTML = `
+                    <button class="ctx-item" data-action="suggest">
+                        ✨ Colocar nas Sugeridas
+                    </button>
+                    <div class="ctx-divider"></div>
+                    <button class="ctx-item" data-action="edit">
+                        ✏ Editar Comunidade
+                    </button>
+                    <button class="ctx-item ctx-danger" data-action="delete">
+                        🗑 Apagar Comunidade
+                    </button>
+                `;
+
+                document.body.appendChild(ctxMenu);
+
+                // Ações dos botões do menu
+                ctxMenu.querySelectorAll('.ctx-item').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const action = btn.dataset.action;
+                        ctxMenu.remove();
+
+                        if(action === 'suggest') {
+                            // ✅ 4. ADICIONAR NAS SUGERIDAS
+                            addToSuggestedCommunities(community);
+                        }
+                    });
+                });
+
+                // Fecha o menu quando clicar fora
+                setTimeout(() => {
+                    document.addEventListener('click', function closeMenu(event) {
+                        if (!ctxMenu.contains(event.target)) {
+                            ctxMenu.remove();
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    });
+                }, 10);
+            });
+
+            grid.appendChild(communityCard);
+        });
+    }
+
+    // ================================================
+    // 4. ADICIONAR COMUNIDADE NAS SUGERIDAS
+    // ================================================
+    function addToSuggestedCommunities(community) {
+        const suggestedContainer = document.getElementById('suggested-communities-container');
+
+        // Verifica se já está nas sugeridas
+        const alreadyExists = suggestedContainer.querySelector(`[data-suggested-id="${community.id}"]`);
+        if(alreadyExists) {
+            alert('⚠ Essa comunidade já está nas Sugeridas!');
+            return;
+        }
+
+        // ✅ 5. REMOVE / SUBSTITUI O CARD VAZIO
+        const emptyState = document.getElementById('suggested-empty-state');
+        if(emptyState) {
+            emptyState.remove();
+        }
+
+        // Cria o card da comunidade
+        const communityCard = document.createElement('div');
+        communityCard.className = 'community-card';
+        communityCard.dataset.suggestedId = community.id;
+
+        communityCard.innerHTML = `
+            <img class="banner" src="${community.banner}" alt="${community.name}" />
+            <div class="overlay">
+                <img class="icon" src="${community.icon}" alt="" />
+                <div class="name">${community.name}</div>
+                <div class="members">${community.members} membros</div>
+            </div>
+        `;
+
+        // Adiciona o card no container
+        suggestedContainer.appendChild(communityCard);
+
+        // Salva no localStorage para persistir
+        saveSuggestedCommunities();
+
+        alert(`✅ Comunidade "${community.name}" adicionada nas Sugeridas!`);
+    }
+
+    // ================================================
+    // SALVAR E CARREGAR DO LOCALSTORAGE
+    // ================================================
+    function saveSuggestedCommunities() {
+        const suggestedIds = Array.from(document.querySelectorAll('[data-suggested-id]')).map(el => el.dataset.suggestedId);
+        localStorage.setItem('suggestedCommunitiesIds', JSON.stringify(suggestedIds));
+    }
+
+    function loadSuggestedCommunities() {
+        const suggestedIds = JSON.parse(localStorage.getItem('suggestedCommunitiesIds') || '[]');
+        
+        if(suggestedIds.length > 0) {
+            // Remove o card vazio
+            const emptyState = document.getElementById('suggested-empty-state');
+            if(emptyState) emptyState.remove();
+
+            // Adiciona todas as comunidades salvas
+            suggestedIds.forEach(communityId => {
+                const community = userCommunities.find(c => c.id === communityId);
+                if(community) {
+                    const suggestedContainer = document.getElementById('suggested-communities-container');
+                    
+                    const communityCard = document.createElement('div');
+                    communityCard.className = 'community-card';
+                    communityCard.dataset.suggestedId = community.id;
+
+                    communityCard.innerHTML = `
+                        <img class="banner" src="${community.banner}" alt="${community.name}" />
+                        <div class="overlay">
+                            <img class="icon" src="${community.icon}" alt="" />
+                            <div class="name">${community.name}</div>
+                            <div class="members">${community.members} membros</div>
+                        </div>
+                    `;
+
+                    suggestedContainer.appendChild(communityCard);
+                }
+            });
+        }
+    }
+
+    // ================================================
+    // INICIALIZAR O SISTEMA
+    // ================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        renderUserCommunities();
+        loadSuggestedCommunities();
+        console.log('✅ Sistema de Comunidades Sugeridas carregado com sucesso!');
+    });
+
+</script>
+
+</body>
+</html>

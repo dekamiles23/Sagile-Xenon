@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ZX Chat - Autenticação</title>
+  <link rel="stylesheet" href="style.css" />
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: linear-gradient(135deg, #0a0012, #1a002b, #0a0012);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+      overflow-x: hidden;
+    }
+    
+    .modal-auth {
+      max-width: 420px;
+      width: 90vw;
+      background: rgba(10, 0, 18, 0.95);
+      border: 1px solid #ff00ff;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 0 40px rgba(255, 0, 255, 0.3);
+      animation: authOpen 0.3s ease-out;
+    }
+    
+    @keyframes authOpen {
+      from { opacity: 0; transform: translateY(20px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    
+    .modal-logo {
+      font-size: 64px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    
+    .modal-auth h2 {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    
+    .modal-auth p {
+      text-align: center;
+      color: #aaa;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .auth-form input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,0,255,0.3);
+      border-radius: 8px;
+      color: #fff;
+      outline: none;
+      font-size: 14px;
+      transition: all 0.15s;
+    }
+    
+    .auth-form input:focus {
+      border-color: #00ffff;
+      box-shadow: 0 0 10px rgba(0,255,255,0.2);
+    }
+    
+    .auth-form input::placeholder {
+      color: #888;
+    }
+    
+    .auth-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 4px;
+      cursor: pointer;
+      color: #aaa;
+      font-size: 13px;
+      user-select: none;
+    }
+    
+    .auth-checkbox input[type="checkbox"] {
+      width: auto;
+      cursor: pointer;
+    }
+    
+    .auth-btn {
+      margin-top: 8px;
+      width: 100%;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #ff00ff, #00ffff);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .auth-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 20px rgba(255, 0, 255, 0.4);
+    }
+    
+    .auth-switch {
+      margin-top: 16px;
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .auth-link-btn {
+      background: transparent;
+      border: none;
+      color: #00ffff;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0;
+      margin-left: 4px;
+    }
+    
+    .auth-link-btn:hover {
+      text-decoration: underline;
+    }
+    
+    .auth-error {
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(255,0,0,0.15);
+      border: 1px solid rgba(255,0,0,0.3);
+      border-radius: 8px;
+      color: #ff6666;
+      font-size: 13px;
+      text-align: center;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    .age-notice {
+      color: #888;
+      font-size: 11px;
+      margin-top: -8px;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="modal-auth">
+  <div class="modal-logo">🔐</div>
+  <h2 id="auth-title">Criar Conta</h2>
+  <p id="auth-subtitle">Preencha os dados para se registrar</p>
+  
+  <div class="auth-form">
+    <input id="auth-nick" type="text" placeholder="Seu apelido / Nickname" maxlength="20" />
+    <input id="auth-email" type="email" placeholder="Email válido" />
+    <input id="auth-birthdate" type="date" placeholder="Data de nascimento" />
+    <div class="age-notice">⚠ Você precisa ter pelo menos 14 anos para se registrar</div>
+    <input id="auth-phone" type="tel" placeholder="Número de telefone (opcional)" />
+    <input id="auth-password" type="password" placeholder="Senha (mínimo 6 caracteres)" />
+    <input id="auth-password-confirm" type="password" placeholder="Confirmar senha" />
+    
+    <label class="auth-checkbox">
+      <input type="checkbox" id="auth-terms" />
+      <span>Concordo com os termos de privacidade e proteção de dados</span>
+    </label>
+    
+    <button id="auth-submit-btn" type="button" class="auth-btn">📝 Registrar-se</button>
+    
+    <div class="auth-switch">
+      <span>Já tem uma conta?</span>
+      <button id="auth-switch-btn" class="auth-link-btn">Fazer Login</button>
+    </div>
+  </div>
+  
+  <div id="auth-error" class="auth-error hidden"></div>
+</div>
+
+<script src="account-api.js"></script>
+<script>
+  let isLoginMode = false;
+  
+  function updateAuthMode() {
+    if (isLoginMode) {
+      document.getElementById('auth-title').textContent = 'Fazer Login';
+      document.getElementById('auth-subtitle').textContent = 'Entre com sua conta';
+      document.getElementById('auth-nick').style.display = 'none';
+      document.getElementById('auth-birthdate').style.display = 'none';
+      document.querySelector('.age-notice').style.display = 'none';
+      document.getElementById('auth-phone').style.display = 'none';
+      document.getElementById('auth-password-confirm').style.display = 'none';
+      document.getElementById('auth-terms').parentElement.style.display = 'none';
+      document.getElementById('auth-submit-btn').textContent = '🔑 Entrar';
+      document.getElementById('auth-switch-btn').textContent = 'Criar Conta';
+    } else {
+      document.getElementById('auth-title').textContent = 'Criar Conta';
+      document.getElementById('auth-subtitle').textContent = 'Preencha os dados para se registrar';
+      document.getElementById('auth-nick').style.display = 'block';
+      document.getElementById('auth-birthdate').style.display = 'block';
+      document.querySelector('.age-notice').style.display = 'block';
+      document.getElementById('auth-phone').style.display = 'block';
+      document.getElementById('auth-password-confirm').style.display = 'block';
+      document.getElementById('auth-terms').parentElement.style.display = 'flex';
+      document.getElementById('auth-submit-btn').textContent = '📝 Registrar-se';
+      document.getElementById('auth-switch-btn').textContent = 'Fazer Login';
+    }
+  }
+  
+  // Alternar entre Login e Registro
+  document.getElementById('auth-switch-btn').addEventListener('click', () => {
+    isLoginMode = !isLoginMode;
+    updateAuthMode();
+    document.getElementById('auth-error').classList.add('hidden');
+  });
+  
+  // Botão de Submeter
+  document.getElementById('auth-submit-btn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('auth-error');
+    const submitBtn = document.getElementById('auth-submit-btn');
+    errorEl.classList.add('hidden');
+    
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value.trim();
+    
+    if (!email) {
+      errorEl.textContent = 'Digite um email válido';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    
+    if (!password || password.length < 6) {
+      errorEl.textContent = 'A senha precisa ter no mínimo 6 caracteres';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = isLoginMode ? 'Entrando...' : 'Registrando...';
+    
+    try {
+      if (!isLoginMode) {
+        const nick = document.getElementById('auth-nick').value.trim();
+        const birthdate = document.getElementById('auth-birthdate').value;
+        const passwordConfirm = document.getElementById('auth-password-confirm').value.trim();
+        const termsAccepted = document.getElementById('auth-terms').checked;
+        
+        if (!nick) {
+          throw new Error('Digite seu apelido');
+        }
+        
+        if (password !== passwordConfirm) {
+          throw new Error('As senhas não coincidem');
+        }
+        
+        if (!termsAccepted) {
+          throw new Error('Você precisa concordar com os termos de privacidade');
+        }
+
+        if (!birthdate) {
+          throw new Error('Informe sua data de nascimento');
+        }
+        
+        await AccountAPI.register({
+          nick,
+          email,
+          password,
+          birthdate,
+          phone: document.getElementById('auth-phone').value.trim(),
+        });
+      } else {
+        await AccountAPI.login({ email, password });
+      }
+
+      window.location.href = 'index.html';
+    } catch (err) {
+      let msg = err.message || 'Não foi possível concluir a operação';
+      // Traduzir erros de rede/timeout para mensagem amigável
+      if (
+        err.name === 'AbortError' ||
+        msg === 'Failed to fetch' ||
+        msg.toLowerCase().includes('failed to fetch') ||
+        msg.toLowerCase().includes('networkerror') ||
+        msg.toLowerCase().includes('aborted')
+      ) {
+        msg = 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.';
+      }
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isLoginMode ? '🔑 Entrar' : '📝 Registrar-se';
+    }
+  });
+  
+  // Verificar se já está logado
+  if (localStorage.getItem('zx_session') === 'authenticated' && localStorage.getItem('zx_auth_token')) {
+    window.location.href = 'index.html';
+  }
+
+  // Pré-preencher email se houver dados locais antigos
+  const legacyData = JSON.parse(localStorage.getItem('zx_user_data') || 'null');
+  if (legacyData?.email) {
+    document.getElementById('auth-email').value = legacyData.email;
+  }
+  if (legacyData?.nick && !isLoginMode) {
+    document.getElementById('auth-nick').value = legacyData.nick;
+  }
+</script>
+
+
+<script>
+(function(){
+const clean=()=> {
+ document.querySelectorAll('.server-icon,.server-item,[data-community-id]').forEach(el=>{
+   const id=(el.dataset&& (el.dataset.communityId||el.dataset.id))||'';
+   if(id && String(id).includes('comm')){ if(el.closest('.servers')||el.closest('.servers-rail')||el.parentElement) el.remove(); }
+ });
+};
+document.addEventListener('DOMContentLoaded',clean);
+setTimeout(clean,1000);setTimeout(clean,3000);
+})();
+</script>
+</body>
+</html>

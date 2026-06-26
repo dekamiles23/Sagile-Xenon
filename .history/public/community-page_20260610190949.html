@@ -1,0 +1,2292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Comunidade - Xenon</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="server-view.css" />
+    <link rel="stylesheet" href="online-sidebar.css" />
+    <link rel="stylesheet" href="status-select.css" />
+    <link rel="stylesheet" href="voice-participant-fix.css" />
+    <link rel="stylesheet" href="community-sidebar.css" />
+  
+  <style>
+    /* ✅ LAYOUT PRINCIPAL EXATAMENTE COMO NA IMAGEM */
+    .community-layout {
+      display: flex;
+      height: 100%;
+      width: 100%;
+    }
+
+    /* ✅ COLUNA ESQUERDA */
+    .community-left {
+      width: 260px;
+      border-right: 1px solid rgba(168, 0, 255, 0.15);
+      background: rgba(0,0,0,0.12);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .community-header-card {
+      background: rgba(0,0,0,0.4);
+      border-radius: 12px;
+      border: 1px solid rgba(255,0,255,0.3);
+      padding: 16px;
+    }
+
+    .community-title {
+      color: #fff;
+      font-size: 22px;
+      font-weight: 800;
+      margin: 0 0 12px 0;
+    }
+
+    .level-bar-container {
+      margin-bottom: 16px;
+    }
+
+    .level-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .level-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #8b00ff, #ff00ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .level-text {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .level-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(0,0,0,0.4);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .level-progress {
+      width: 55%;
+      height: 100%;
+      background: linear-gradient(90deg, #8b00ff, #ff00ff);
+      border-radius: 4px;
+    }
+
+    .level-xp {
+      text-align: right;
+      color: #aaa;
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .community-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-label {
+      color: #aaa;
+      font-size: 14px;
+    }
+
+    .stat-value {
+      margin-left: auto;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .stat-online {
+      color: #00ff88;
+    }
+
+    /* ✅ MENU DE NAVEGAÇÃO */
+    .community-nav {
+      background: rgba(0,0,0,0.4);
+      border-radius: 12px;
+      border: 1px solid rgba(255,0,255,0.3);
+      padding: 8px;
+    }
+
+    .nav-title {
+      color: #00ffff;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 8px 12px 12px 12px;
+    }
+
+    .community-nav .nav-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: #aaa;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: left;
+    }
+
+    .community-nav .nav-btn:hover {
+      background: rgba(128,0,255,0.2);
+      color: #fff;
+    }
+
+    .community-nav .nav-btn.active {
+      background: linear-gradient(90deg, rgba(128,0,255,0.4), rgba(128,0,255,0.1));
+      color: #fff;
+      border-left: 3px solid #ff00ff;
+    }
+
+    /* ✅ EVENTO ATIVO */
+    .event-card {
+      background: rgba(0,0,0,0.4);
+      border-radius: 12px;
+      border: 1px solid rgba(255,0,255,0.3);
+      padding: 16px;
+    }
+
+    .event-title {
+      color: #00ffff;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .event-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .event-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(128,0,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .event-name {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .event-desc {
+      color: #aaa;
+      font-size: 13px;
+      margin: 0 0 12px 0;
+    }
+
+    .event-timer {
+      background: rgba(128,0,255,0.2);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+
+    .event-timer-text {
+      color: #ff00ff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .event-timer-value {
+      color: #fff;
+    }
+
+    /* ✅ COLUNA CENTRAL */
+    .community-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+      padding: 16px 24px;
+    }
+
+    /* ✅ ÁREA DE COMPOR POSTAGEM */
+    .compose-post {
+      background: rgba(0,0,0,0.4);
+      border-radius: 16px;
+      border: 1px solid rgba(255,0,255,0.3);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .compose-header {
+      display: flex;
+      gap: 12px;
+    }
+
+    .compose-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #333, #555);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .compose-input {
+      flex: 1;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,0,255,0.2);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: #fff;
+      outline: none;
+      font-size: 15px;
+    }
+
+    .compose-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 16px;
+    }
+
+    .compose-buttons {
+      display: flex;
+      gap: 16px;
+    }
+
+    .compose-btn {
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .compose-btn:hover {
+      color: #00ffff;
+    }
+
+    .publish-btn {
+      background: linear-gradient(135deg, #8b00ff, #ff00ff);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 24px;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* ✅ ABAS DO FEED */
+    .feed-tabs {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255,0,255,0.2);
+      padding-bottom: 8px;
+    }
+
+    .feed-tab {
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      padding-bottom: 8px;
+      border-bottom: 2px solid transparent;
+    }
+
+    .feed-tab.active {
+      color: #00ffff;
+      border-bottom-color: #00ffff;
+    }
+
+    /* ✅ POSTAGENS */
+    .post-card {
+      background: rgba(0,0,0,0.4);
+      border-radius: 16px;
+      border: 1px solid rgba(255,0,255,0.3);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .post-header {
+      padding: 16px 16px 0 16px;
+    }
+
+    .post-author {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .post-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ffb6c1, #ff69b4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .post-author-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .post-username {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .post-time {
+      color: #888;
+      font-size: 12px;
+    }
+
+    .post-verified {
+      color: #00ffff;
+      font-size: 12px;
+    }
+
+    .post-title {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+    }
+
+    .post-body {
+      color: #ddd;
+      font-size: 14px;
+      margin: 0 0 12px 0;
+    }
+
+    .post-tags {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .post-tag {
+      background: rgba(128,0,255,0.3);
+      color: #bb88ff;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .post-image {
+      width: 100%;
+      max-height: 350px;
+      object-fit: cover;
+    }
+
+    .post-actions {
+      padding: 12px 16px 16px 16px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .post-action-btn {
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .post-action-btn:hover {
+      color: #00ffff;
+    }
+
+    .post-save-btn {
+      margin-left: auto;
+    }
+
+    /* ✅ ENQUETE */
+    .poll-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .poll-option {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 10px 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .poll-progress {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: rgba(128,0,255,0.3);
+    }
+
+    .poll-content {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      z-index: 1;
+    }
+
+    .poll-text {
+      color: #fff;
+    }
+
+    .poll-percent {
+      color: #aaa;
+    }
+
+    /* ✅ COLUNA DIREITA */
+    .community-right {
+      width: 320px;
+      border-left: 1px solid rgba(168, 0, 255, 0.15);
+      background: rgba(0,0,0,0.12);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .right-card {
+      background: rgba(0,0,0,0.4);
+      border-radius: 12px;
+      border: 1px solid rgba(255,0,255,0.3);
+      padding: 16px;
+    }
+
+    .right-card-title {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .rule-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .rule-number {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4488ff, #0066ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .rule-text {
+      color: #ddd;
+      font-size: 13px;
+    }
+
+    .view-all-rules {
+      width: 100%;
+      background: rgba(128,0,255,0.1);
+      border: 1px solid rgba(128,0,255,0.3);
+      border-radius: 8px;
+      padding: 10px;
+      color: #ff00ff;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    .chat-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+
+    .chat-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667, #889);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .chat-info {
+      flex: 1;
+    }
+
+    .chat-name {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .chat-members {
+      color: #888;
+      font-size: 11px;
+    }
+
+    .chat-online {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00ff88;
+    }
+
+    .announcement-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .announcement-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(0,100,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .announcement-info {
+      flex: 1;
+    }
+
+    .announcement-title {
+      color: #00ffff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .announcement-desc {
+      color: #888;
+      font-size: 11px;
+    }
+
+    .announcement-time {
+      color: #666;
+      font-size: 11px;
+    }
+
+    /* ✅ BARRA SUPERIOR */
+    .top-navbar {
+      height: 56px;
+      background: rgba(0,0,0,0.4);
+      border-bottom: 1px solid rgba(0,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .top-nav-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .top-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6600ff, #aa00ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .top-username {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .top-nav-center {
+      display: flex;
+      gap: 8px;
+    }
+
+    .top-nav-btn {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(0,255,255,0.3);
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: #00ffff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .top-nav-btn:hover {
+      background: rgba(0,255,255,0.1);
+    }
+
+    .top-nav-right {
+      display: flex;
+      gap: 12px;
+    }
+
+    .top-icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .top-icon-btn:hover {
+      color: #fff;
+    }
+
+    /* ✅ BARRA INFERIOR */
+    .bottom-bar {
+      height: 56px;
+      background: rgba(0,0,0,0.6);
+      border-top: 1px solid rgba(0,255,255,0.2);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+    }
+
+    .bottom-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0,255,255,0.1);
+      border: 2px solid #00ffff;
+      color: #00ffff;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .bottom-divider {
+      width: 1px;
+      height: 32px;
+      background: rgba(255,0,255,0.3);
+    }
+
+    .bottom-server-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,0,255,0.3);
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .bottom-add-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.3);
+      border: 2px dashed rgba(0,255,255,0.4);
+      color: #00ffff;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    /* ✅ SISTEMA DE ABAS */
+    .community-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255,0,255,0.2);
+      padding-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .nav-tab {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,0,255,0.2);
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: #aaa;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .nav-tab:hover {
+      background: rgba(128,0,255,0.2);
+      color: #fff;
+    }
+
+    .nav-tab.active {
+      background: linear-gradient(135deg, rgba(128,0,255,0.4), rgba(128,0,255,0.1));
+      color: #fff;
+      border-color: #ff00ff;
+    }
+
+    .tab-content.hidden {
+      display: none !important;
+    }
+
+    .btn-neon {
+      background: linear-gradient(135deg, #8b00ff, #ff00ff);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 16px;
+    }
+
+    .btn-neon:hover {
+      filter: brightness(1.2);
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .gallery-item {
+      aspect-ratio: 1;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,0,255,0.2);
+      background: rgba(0,0,0,0.3);
+    }
+
+    .gallery-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .announcement-card {
+      background: rgba(0,0,0,0.4);
+      border-radius: 12px;
+      border: 1px solid rgba(255,0,255,0.2);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .announcement-card.priority-high {
+      border-left: 4px solid #ff4444;
+    }
+
+    .announcement-card.priority-medium {
+      border-left: 4px solid #ffaa00;
+    }
+
+    .announcement-card.priority-low {
+      border-left: 4px solid #44ff88;
+    }
+
+    #rules-editor {
+      width: 100%;
+      min-height: 300px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,0,255,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      color: #fff;
+      font-size: 14px;
+      resize: vertical;
+      margin-bottom: 12px;
+      outline: none;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+    }
+
+    .poll-card {
+      background: rgba(0,0,0,0.4);
+      border-radius: 12px;
+      border: 1px solid rgba(255,0,255,0.2);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div id="app">
+
+  <!-- ✅ BARRA SUPERIOR EXATAMENTE IGUAL AO INDEX.HTML -->
+  <header class="navbar">
+      <div class="navbar-left">
+         <button class="icon-btn" id="btn-dm-list" title="Mensagens Privadas">💬</button>
+         <button class="icon-btn" id="btn-visual-settings" title="Configurar aparência das mensagens" style="margin-left: 8px;">🎨</button>
+      </div>
+    <nav class="navbar-nav" style="display: flex; flex-direction: row; gap: 8px; align-items: center;">
+      <button type="button" class="nav-btn" id="nav-friends" data-modal="friends-modal">Amigos</button>
+      <button type="button" class="nav-btn" id="nav-diary" data-modal="diary-modal">📖 Diário</button>
+      <button type="button" class="nav-btn" id="nav-store" data-modal="store-modal">Loja</button>
+      <button type="button" class="nav-btn" id="nav-support" data-modal="support-modal">Suporte</button>
+    </nav>
+    <div class="navbar-icons">
+      <button class="icon-btn" id="btn-typewriter" title="Máquina de Escrever">⌨</button>
+      <button class="icon-btn" id="btn-open-settings" title="Configurações">⚙</button>
+      <button class="icon-btn" id="btn-open-community" title="Servidores">🏠</button>
+    </div>
+  </header>
+  
+  <div class="navbar-divider"></div>
+
+  <!-- ✅ LAYOUT PRINCIPAL -->
+  <div class="app-body" style="height: calc(100vh - 116px);">
+    <div class="community-layout" style="width: 100%; height: 100%;">
+    
+    <!-- ✅ COLUNA ESQUERDA -->
+    <aside class="community-left">
+      
+      <div class="community-header-card">
+        <h2 class="community-title" id="community-page-title">XENON COMUNIDADE</h2>
+        
+        <div class="level-bar-container">
+          <div class="level-row">
+            <div class="level-icon">🧍</div>
+            <span class="level-text" id="community-user-level">Nível 1</span>
+          </div>
+          <div class="level-bar">
+            <div class="level-progress" id="community-level-progress" style="width: 0%;"></div>
+          </div>
+          <div class="level-xp" id="community-user-xp">0 / 100 XP</div>
+        </div>
+        
+        <div class="community-stats">
+          <div class="stat-row">
+            <span class="stat-label">👥 Membros</span>
+            <span class="stat-value" id="community-members-count">1</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label stat-online">🟢 Online agora</span>
+            <span class="stat-value" id="community-online-count">1</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">📅 Criada em</span>
+            <span class="stat-value" id="community-created-date">07/01/2020</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="community-nav">
+        <div class="nav-title">NAVEGAR</div>
+        
+        <button class="nav-btn active" data-nav-tab="feed">🏠 Feed</button>
+        <button class="nav-btn" data-nav-tab="galeria">🖼 Galeria</button>
+        <button class="nav-btn" data-nav-tab="avisos">📢 Avisos</button>
+        <button class="nav-btn" data-nav-tab="regras">📜 Regras</button>
+        <button class="nav-btn" data-nav-tab="salvos">📌 Salvos</button>
+        <button class="nav-btn" data-nav-tab="perguntas">❔ Perguntas</button>
+      </div>
+      
+      <div class="event-card">
+        <div class="event-title">EVENTO ATIVO</div>
+        
+        <div class="event-header">
+          <div class="event-icon">🎨</div>
+          <div class="event-name">Desafio Criativo</div>
+        </div>
+        
+        <p class="event-desc">Mostre sua arte ou edição com o tema "Renascimento" e ganhe prêmios!</p>
+        
+        <div class="event-timer">
+          <span class="event-timer-text">🏆 Termina em: <span class="event-timer-value">3d 12h 45m</span></span>
+        </div>
+      </div>
+
+      <!-- ✅ TAG DA COMUNIDADE -->
+      <div class="event-card">
+        <div class="event-title">🏷️ TAG DA COMUNIDADE</div>
+        
+        <div class="event-header">
+          <div class="event-icon">🏷️</div>
+          <div class="event-name" id="community-tag-name">ZX Membro</div>
+        </div>
+        
+        <p class="event-desc">Adquira essa tag exclusiva para mostrar que você faz parte dessa comunidade!</p>
+        
+        <button class="view-all-rules" id="btn-acquire-tag">✅ ADQUIRIR TAG</button>
+      </div>
+      
+    </aside>
+    
+    <!-- ✅ COLUNA CENTRAL -->
+    <main class="community-center">
+      
+      <!-- ✅ BARRA DE NAVEGAÇÃO DAS ABAS -->
+      <div class="community-tabs">
+        <button class="nav-tab active" id="tab-btn-feed" onclick="switchTab('feed')">FEED</button>
+        <button class="nav-tab" id="tab-btn-gallery" onclick="switchTab('gallery')">GALERIA</button>
+        <button class="nav-tab" id="tab-btn-announcements" onclick="switchTab('announcements')">AVISOS</button>
+        <button class="nav-tab" id="tab-btn-rules" onclick="switchTab('rules')">REGRAS</button>
+        <button class="nav-tab" id="tab-btn-saved" onclick="switchTab('saved')">SALVOS</button>
+        <button class="nav-tab" id="tab-btn-polls" onclick="switchTab('polls')">PERGUNTAS</button>
+      </div>
+
+      <!-- ✅ ÁREA DE CONTEÚDO DAS ABAS -->
+      <div class="community-content-area">
+        
+        <!-- ✅ ABA FEED -->
+        <div id="tab-feed" class="tab-content">
+          <div class="compose-post">
+            <div class="compose-header">
+              <div class="compose-avatar">👤</div>
+              <input type="text" class="compose-input" placeholder="No que você está pensando?" />
+            </div>
+            
+            <div class="compose-actions">
+              <div class="compose-buttons">
+                <button class="compose-btn">📷 Imagem</button>
+                <button class="compose-btn">📊 Enquete</button>
+                <button class="compose-btn">❓ Pergunta</button>
+                <button class="compose-btn">🎬 Vídeo</button>
+              </div>
+              <button class="publish-btn">Publicar</button>
+            </div>
+          </div>
+          
+          <div class="feed-tabs">
+            <button class="feed-tab active">Para você</button>
+            <button class="feed-tab">Seguindo</button>
+            <button class="feed-tab">Recentes</button>
+            <button class="feed-tab">Popular</button>
+          </div>
+          
+          <div id="community-feed-empty" class="empty-state">
+            <div class="empty-state-icon">📝</div>
+            <div class="empty-state-title">Nenhuma postagem ainda</div>
+            <div class="empty-state-text">Seja o primeiro a publicar algo na comunidade!</div>
+          </div>
+          
+          <div id="community-feed-posts">
+            <!-- Postagens serão adicionadas aqui em tempo real -->
+          </div>
+        </div>
+        
+        <!-- ✅ ABA GALERIA -->
+        <div id="tab-gallery" class="tab-content hidden">
+          <button id="btn-add-photo" class="btn-neon" onclick="addGalleryImage()">+ Adicionar Foto</button>
+          <input type="file" id="gallery-file-input" accept="image/*" style="display: none;" />
+          <div id="gallery-grid" class="gallery-grid"></div>
+          <div id="gallery-empty" class="empty-state hidden">
+            <div class="empty-state-icon">🖼️</div>
+            <div class="empty-state-title">Nenhuma foto na galeria ainda</div>
+          </div>
+        </div>
+        
+        <!-- ✅ ABA AVISOS -->
+        <div id="tab-announcements" class="tab-content hidden">
+          <button id="btn-add-announcement" class="btn-neon" onclick="openAddAnnouncementModal()">+ Adicionar Aviso</button>
+          <div id="announcements-list" class="announcements-list"></div>
+          <div id="announcements-empty" class="empty-state hidden">
+            <div class="empty-state-icon">📢</div>
+            <div class="empty-state-title">Nenhum aviso publicado</div>
+          </div>
+        </div>
+        
+        <!-- ✅ ABA REGRAS -->
+        <div id="tab-rules" class="tab-content hidden">
+          <textarea id="rules-editor" placeholder="Escreva as regras da comunidade..."></textarea>
+          <button id="btn-save-rules" class="btn-neon" onclick="saveRules()">Salvar Regras</button>
+        </div>
+        
+        <!-- ✅ ABA SALVOS -->
+        <div id="tab-saved" class="tab-content hidden">
+          <div id="saved-posts-list" class="saved-posts-list"></div>
+          <div id="saved-empty" class="empty-state hidden">
+            <div class="empty-state-icon">📌</div>
+            <div class="empty-state-title">Nenhuma postagem salva ainda</div>
+          </div>
+        </div>
+        
+        <!-- ✅ ABA PERGUNTAS -->
+        <div id="tab-polls" class="tab-content hidden">
+          <button id="btn-create-poll" class="btn-neon" onclick="openCreatePollModal()">+ Criar Enquete/Pergunta</button>
+          <div id="polls-list" class="polls-list"></div>
+          <div id="polls-empty" class="empty-state hidden">
+            <div class="empty-state-icon">❓</div>
+            <div class="empty-state-title">Nenhuma enquete ou pergunta criada</div>
+          </div>
+        </div>
+        
+      </div>
+      
+    </main>
+    
+    <!-- ✅ COLUNA DIREITA -->
+    <aside class="community-right">
+      
+      <div class="right-card">
+        <div class="right-card-title">REGRAS DA COMUNIDADE</div>
+        
+        <div class="rule-item">
+          <div class="rule-number">1</div>
+          <span class="rule-text">Seja respeitoso com todos os membros.</span>
+        </div>
+        <div class="rule-item">
+          <div class="rule-number">2</div>
+          <span class="rule-text">Proibido discurso de ódio ou preconceito.</span>
+        </div>
+        <div class="rule-item">
+          <div class="rule-number">3</div>
+          <span class="rule-text">Nada de spam ou autopromoção.</span>
+        </div>
+        <div class="rule-item">
+          <div class="rule-number">4</div>
+          <span class="rule-text">Mantenha o conteúdo apropriado.</span>
+        </div>
+        <div class="rule-item">
+          <div class="rule-number">5</div>
+          <span class="rule-text">Use as tags corretas ao postar.</span>
+        </div>
+        <div class="rule-item">
+          <div class="rule-number">6</div>
+          <span class="rule-text">Respeite os líderes e curadores.</span>
+        </div>
+        
+        <button class="view-all-rules">Ver todas as regras</button>
+      </div>
+      
+      <div class="right-card">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div class="right-card-title">CHATS EM DESTAQUE</div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-create-public-chat" style="background: rgba(0,255,255,0.1); border: 1px solid rgba(0,255,255,0.3); border-radius: 6px; padding: 4px 8px; color: #00ffff; font-size: 11px; cursor: pointer;">+ Criar Chat</button>
+            <button style="background: transparent; border: none; color: #00ffff; font-size: 12px; cursor: pointer;">Ver todos</button>
+          </div>
+        </div>
+        
+        <div id="featured-chats-empty" style="text-align: center; padding: 30px 10px; color: #888;">
+          <div style="font-size: 32px; margin-bottom: 8px; opacity: 0.5;">💬</div>
+          <div style="font-size: 13px;">Nenhum chat em destaque</div>
+        </div>
+        
+        <div id="featured-chats-list">
+          <!-- Chats serão adicionados aqui em tempo real -->
+        </div>
+      </div>
+      
+      <div class="right-card">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div class="right-card-title">AVISOS</div>
+          <button style="background: transparent; border: none; color: #00ffff; font-size: 12px; cursor: pointer;">Ver todos</button>
+        </div>
+        
+        <div class="announcement-item">
+          <div class="announcement-icon">🔔</div>
+          <div class="announcement-info">
+            <div class="announcement-title">Atualização da Comunidade</div>
+            <div class="announcement-desc">Novas funções e melhorias disponíveis!</div>
+          </div>
+          <div class="announcement-time">há 1 dia</div>
+        </div>
+        
+        <div class="announcement-item">
+          <div class="announcement-icon" style="background: rgba(255,100,0,0.2);">⭐</div>
+          <div class="announcement-info">
+            <div class="announcement-title" style="color: #ff6600;">Evento de Verão</div>
+            <div class="announcement-desc">Participe e ganhe recompensas exclusivas.</div>
+          </div>
+          <div class="announcement-time">há 3 dias</div>
+        </div>
+      </div>
+      
+    </aside>
+    
+    </div>
+  </div>
+
+  </div>
+
+  <!-- ✅ BARRA INFERIOR EXATAMENTE IGUAL AO INDEX.HTML -->
+  <nav class="servers-rail" id="servers-rail">
+    <span class="rail-section-label">Início</span>
+    <div class="server-rail-icon home-icon" id="btn-home" title="Início">⌂</div>
+    <div class="rail-divider"></div>
+    <span class="rail-section-label">Servidores</span>
+    <div class="server-rail-icon add-server-btn" id="btn-add-community" title="Criar servidor">＋</div>
+    <div class="rail-divider"></div>
+    <div class="server-rail-icon add-server-btn" id="btn-add-fandom" title="Criar Fandom">+</div>
+  </nav>
+
+  <!-- ✅ TODOS OS MODAIS EXATAMENTE IGUAIS AO INDEX.HTML -->
+
+  <!-- ═══════════════ CRIAR SERVIDOR ═══════════════ -->
+  <div id="community-modal" class="modal-overlay hidden">
+    <div class="modal modal-community">
+      <h2>Criar Servidor</h2>
+      <p class="modal-subtitle">Escolha um modelo para começar</p>
+      <input id="community-name-input" type="text" placeholder="Nome do servidor" maxlength="32" />
+      <div class="community-options">
+        <button type="button" class="community-option" data-template="base">
+          <span class="option-icon">📋</span>
+          <span class="option-title">Modelo base</span>
+          <span class="option-desc">Canais prontos: geral, jogos, música e mais</span>
+        </button>
+        <button type="button" class="community-option" data-template="blank">
+          <span class="option-icon">📄</span>
+          <span class="option-title">Modelo blank</span>
+          <span class="option-desc">Comece do zero com apenas o essencial</span>
+        </button>
+      </div>
+      
+      <div style="margin: 16px 0; border-top: 1px solid rgba(0,255,255,0.2); padding-top: 16px;">
+        <button type="button" class="btn-ghost" id="btn-join-server" style="width: 100%; margin-bottom: 12px;">🔗 Entrar em um servidor</button>
+        
+        <div id="join-server-section" class="hidden">
+          <input id="invite-link-input" type="text" placeholder="Cole o link de convite aqui..." style="width: 100%; margin-bottom: 12px;" />
+          <button type="button" class="btn-neon" id="btn-confirm-join" style="width: 100%;">Entrar no Servidor</button>
+        </div>
+      </div>
+      
+      <button type="button" class="btn-ghost" id="community-modal-close">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ CRIAR FANDOM ═══════════════ -->
+  <div id="fandom-modal" class="modal-overlay hidden">
+    <div class="modal modal-community">
+      <h2>Criar Fandom</h2>
+      <p class="modal-subtitle">Crie um grupo para sua comunidade de fãs</p>
+      <input id="fandom-name-input" type="text" placeholder="Nome do fandom" maxlength="32" />
+      <input id="fandom-topic-input" type="text" placeholder="Tema / Assunto principal" maxlength="64" />
+      <div class="community-options">
+        <button type="button" class="community-option" data-fandom-type="game">
+          <span class="option-icon">🎮</span>
+          <span class="option-title">Jogo</span>
+          <span class="option-desc">Fandom de jogos, e-sports e comunidades gamer</span>
+        </button>
+        <button type="button" class="community-option" data-fandom-type="media">
+          <span class="option-icon">🎬</span>
+          <span class="option-title">Mídia</span>
+          <span class="option-desc">Séries, filmes, animes, livros e música</span>
+        </button>
+        <button type="button" class="community-option" data-fandom-type="creator">
+          <span class="option-icon">⭐</span>
+          <span class="option-title">Criador</span>
+          <span class="option-desc">Fã clube para streamers, youtubers e artistas</span>
+        </button>
+        <button type="button" class="community-option" data-fandom-type="other">
+          <span class="option-icon">✨</span>
+          <span class="option-title">Outro</span>
+          <span class="option-desc">Qualquer outro tipo de comunidade</span>
+        </button>
+      </div>
+      <button type="button" class="btn-ghost" id="fandom-modal-close">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ AMIGOS ═══════════════ -->
+  <div id="friends-modal" class="modal-overlay hidden">
+    <div class="modal-modern">
+      <div class="mm-header">
+        <span class="mm-title">Amigos</span>
+        <button class="mm-close" id="friends-modal-close">✕</button>
+      </div>
+      <div class="mm-tabs">
+        <button class="mm-tab active" data-tab="fo">Online</button>
+        <button class="mm-tab" data-tab="fa">Todos</button>
+        <button class="mm-tab" data-tab="fr">Solicitações</button>
+        <button class="mm-tab mm-tab-add" data-tab="fa-add">+ Adicionar amigo</button>
+      </div>
+      <div class="mm-body">
+        <div id="fo" class="mm-pane active">
+          <div class="empty-state">🟢<p>Nenhum amigo online no momento.</p></div>
+        </div>
+        <div id="fa" class="mm-pane hidden">
+          <div class="empty-state">👥<p>Sua lista de amigos está vazia.</p></div>
+        </div>
+        <div id="fr" class="mm-pane hidden">
+          <div class="empty-state">📩<p>Nenhuma solicitação pendente.</p></div>
+        </div>
+        <div id="fa-add" class="mm-pane hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ LOJA ═══════════════ -->
+  <div id="store-modal" class="modal-overlay hidden">
+    <div class="modal-modern">
+      <div class="mm-header">
+        <span class="mm-title">Loja</span>
+        <button class="mm-close" id="store-modal-close">✕</button>
+      </div>
+      <div class="mm-body">
+        <div class="empty-state">🛍<p>Ainda não há produtos aqui.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ DIÁRIO ═══════════════ -->
+  <div id="diary-modal" class="modal-overlay hidden">
+    <div class="modal-modern" style="width: 900px; max-width: 95vw; height: 80vh;">
+      <div class="mm-header">
+        <span class="mm-title">📖 Meu Diário</span>
+        <button class="mm-close" id="diary-modal-close">✕</button>
+      </div>
+      <div class="mm-body" style="display: flex; flex-direction: column; height: 100%; padding: 0;">
+        
+        <div style="display: flex; gap: 12px; padding: 16px; border-bottom: 1px solid rgba(255,0,255,0.2);">
+          <input type="text" id="diary-search" placeholder="🔍 Pesquisar anotações..." style="flex: 1; padding: 10px 14px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; outline: none;" />
+          <select id="diary-category-filter" style="padding: 10px 14px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff;">
+            <option value="">Todas categorias</option>
+            <option value="pessoal">📝 Pessoal</option>
+            <option value="trabalho">💼 Trabalho</option>
+            <option value="ideias">💡 Ideias</option>
+            <option value="lembretes">⏰ Lembretes</option>
+          </select>
+          <button id="diary-new-btn" class="btn-neon" style="padding: 0 20px;">+ Nova anotação</button>
+        </div>
+
+        <div style="display: flex; flex: 1; overflow: hidden;">
+          <div id="diary-list" style="width: 320px; border-right: 1px solid rgba(255,0,255,0.2); overflow-y: auto; padding: 8px;">
+            <div class="empty-state small">📖 Nenhuma anotação ainda</div>
+          </div>
+          
+          <div id="diary-editor" style="flex: 1; display: flex; flex-direction: column; padding: 16px; gap: 12px;">
+            <input type="text" id="diary-title" placeholder="Título da anotação..." style="padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; font-size: 18px; font-weight: 600; outline: none;" />
+            
+            <div style="display: flex; gap: 12px;">
+              <select id="diary-category" style="padding: 8px 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff;">
+                <option value="pessoal">📝 Pessoal</option>
+                <option value="trabalho">💼 Trabalho</option>
+                <option value="ideias">💡 Ideias</option>
+                <option value="lembretes">⏰ Lembretes</option>
+              </select>
+              <button id="diary-pin-btn" class="btn-ghost-sm">📌 Fixar</button>
+              <button id="diary-delete-btn" class="btn-ghost-sm" style="color: #ff4444;">🗑 Excluir</button>
+              <span id="diary-save-status" style="margin-left: auto; color: #888; font-size: 13px; align-self: center;">Salvo automaticamente</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ CRIAR CHAT PÚBLICO ═══════════════ -->
+  <div id="create-chat-modal" class="modal-overlay hidden">
+    <div class="modal-modern" style="width: 500px; max-width: 95vw;">
+      <div class="mm-header">
+        <span class="mm-title">💬 Criar Novo Chat</span>
+        <button class="mm-close" id="create-chat-modal-close">✕</button>
+      </div>
+      <div class="mm-body" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        
+        <div>
+          <label style="color: #fff; font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">Nome do Chat</label>
+          <input id="chat-name-input" type="text" placeholder="Digite o nome do chat..." maxlength="40" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; outline: none;" />
+        </div>
+        
+        <div>
+          <label style="color: #fff; font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">Descrição</label>
+          <textarea id="chat-desc-input" placeholder="Descreva o propósito deste chat..." maxlength="150" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; outline: none; resize: vertical; min-height: 60px;"></textarea>
+        </div>
+        
+        <div>
+          <label style="color: #fff; font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">Regras do Chat</label>
+          <textarea id="chat-rules-input" placeholder="Regras que os membros devem seguir neste chat..." maxlength="200" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; outline: none; resize: vertical; min-height: 60px;"></textarea>
+        </div>
+        
+        <div>
+          <label style="color: #fff; font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">Visibilidade</label>
+          <div style="display: flex; gap: 12px;">
+            <label style="flex: 1; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <input type="radio" name="chat-visibility" value="public" checked style="accent-color: #ff00ff;" />
+              <div>
+                <div style="color: #fff; font-weight: 600;">🌐 Público</div>
+                <div style="color: #aaa; font-size: 12px;">Visível para todos os membros</div>
+              </div>
+            </label>
+            <label style="flex: 1; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <input type="radio" name="chat-visibility" value="private" style="accent-color: #ff00ff;" />
+              <div>
+                <div style="color: #fff; font-weight: 600;">🔒 Privado</div>
+                <div style="color: #aaa; font-size: 12px;">Apenas convidados podem ver</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        
+        <button id="btn-confirm-create-chat" class="btn-neon" style="width: 100%; margin-top: 8px;">✅ Criar Chat</button>
+        
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script>
+    // ✅ CORREÇÃO FINAL: CARREGAR USUÁRIO ANTES DO SCRIPT.JS
+    window.username = localStorage.getItem('zx_username') 
+                   || localStorage.getItem('username') 
+                   || sessionStorage.getItem('username') 
+                   || '';
+
+    // ✅ DEFINIR REFERÊNCIAS GLOBAIS ANTES DO SCRIPT.JS EXECUTAR
+    window.addEventListener('load', function() {
+      // ✅ EXECUTAR EXATAMENTE AS MESMAS FUNÇÕES DO INDEX.HTML
+      if (window.applyProfileMedia) window.applyProfileMedia();
+      if (window.updateUserUI) window.updateUserUI();
+    });
+  </script>
+
+  <!-- ✅ ORDEM EXATA DOS SCRIPTS IGUAL AO INDEX.HTML -->
+  <script src="script.js"></script>
+  <script src="online-sidebar.js"></script>
+  <script src="gif-picker.js"></script>
+  <script src="chat-input.js"></script>
+  <script src="invite-system.js"></script>
+  <script src="fix-pickers.js"></script>
+  <script src="community.js"></script>
+  <script src="voice-system.js"></script>
+  <script src="voice-system-complete.js"></script>
+  <script src="server-chat.js"></script>
+  <script src="block-old-code.js"></script>
+
+  <script>
+      // ✅ SISTEMA DINÂMICO DA PÁGINA DA COMUNIDADE
+    document.addEventListener('DOMContentLoaded', function() {
+      
+      // ✅ EVENTO GLOBAL PARA QUALQUER CLICK EM .chat-item
+      document.addEventListener('click', function(e) {
+        const chatItem = e.target.closest('.chat-item');
+        if (chatItem) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          if (window.openPublicChat) {
+            window.openPublicChat();
+          } else {
+            setTimeout(() => window.openPublicChat(), 100);
+          }
+        }
+      });
+      
+      // ✅ REMOVIDO SISTEMA DE PERFIL PRÓPRIO
+      // ✅ AGORA USA 100% O SISTEMA NATIVO DO SCRIPT.JS
+      // ✅ NENHUMA LÓGICA DUPLICADA
+      
+      // ✅ TODOS OS BOTÕES DA NAVBAR FUNCIONAM EXATAMENTE IGUAL AO INDEX.HTML
+      document.getElementById('btn-dm-list').addEventListener('click', () => {
+        window.location.href = 'index.html#dm';
+      });
+      
+      document.getElementById('btn-visual-settings').addEventListener('click', () => {
+        document.getElementById('visual-settings-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('nav-friends').addEventListener('click', () => {
+        document.getElementById('friends-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('nav-diary').addEventListener('click', () => {
+        document.getElementById('diary-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('nav-store').addEventListener('click', () => {
+        document.getElementById('store-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('nav-support').addEventListener('click', () => {
+        document.getElementById('support-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('btn-typewriter').addEventListener('click', () => {
+        window.location.href = 'index.html#typewriter';
+      });
+      
+      document.getElementById('btn-open-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('btn-open-community').addEventListener('click', () => {
+        window.location.href = 'index.html';
+      });
+      
+      document.getElementById('btn-home').addEventListener('click', () => {
+        window.location.href = 'index.html';
+      });
+      
+      document.getElementById('btn-add-community').addEventListener('click', () => {
+        document.getElementById('community-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('btn-add-fandom').addEventListener('click', () => {
+        document.getElementById('fandom-modal').classList.remove('hidden');
+      });
+      
+      // ✅ PEGAR PARÂMETROS DA URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const communityId = urlParams.get('id');
+      const communityName = urlParams.get('name');
+      
+      // ✅ ATUALIZAR TÍTULO DA COMUNIDADE
+      if (communityName) {
+        document.getElementById('community-page-title').textContent = communityName.toUpperCase();
+        document.title = `${communityName} - Xenon`;
+      }
+      
+      // ✅ CARREGAR DADOS DA COMUNIDADE DO LOCALSTORAGE
+      const userCommunities = JSON.parse(localStorage.getItem('userCommunities') || '[]');
+      const currentCommunity = userCommunities.find(c => c.id === communityId);
+      
+      if (currentCommunity) {
+        // Atualizar contadores
+        document.getElementById('community-members-count').textContent = currentCommunity.members || 1;
+        document.getElementById('community-online-count').textContent = currentCommunity.online || 1;
+        
+        // Atualizar data de criação
+        if (currentCommunity.createdAt) {
+          const createdDate = new Date(currentCommunity.createdAt);
+          document.getElementById('community-created-date').textContent = createdDate.toLocaleDateString('pt-BR');
+        }
+      }
+      
+      // ✅ SISTEMA DE POSTAGENS EM TEMPO REAL
+      const publishBtn = document.querySelector('.publish-btn');
+      const composeInput = document.querySelector('.compose-input');
+      const feedEmpty = document.getElementById('community-feed-empty');
+      const feedPosts = document.getElementById('community-feed-posts');
+      
+      // Carregar postagens salvas
+      let communityPosts = JSON.parse(localStorage.getItem(`community_${communityId}_posts`) || '[]');
+      
+      function renderPosts() {
+        feedPosts.innerHTML = '';
+        
+        if (communityPosts.length === 0) {
+          feedEmpty.style.display = 'block';
+        } else {
+          feedEmpty.style.display = 'none';
+          
+          communityPosts.forEach(post => {
+            const postCard = document.createElement('div');
+            postCard.className = 'post-card';
+            postCard.style.padding = '16px';
+            
+            postCard.innerHTML = `
+              <div class="post-author">
+                <div class="post-avatar" style="background: linear-gradient(135deg, #6600ff, #aa00ff);">👤</div>
+                <div class="post-author-info">
+                  <span class="post-username">${post.username}</span>
+                  <span class="post-time">${post.time}</span>
+                </div>
+              </div>
+              
+              <div class="post-body" style="color: #ddd; font-size: 15px; margin: 8px 0 16px 0;">${post.text}</div>
+              
+              <div class="post-actions" style="padding: 0;">
+                <button class="post-action-btn">🤍 ${post.likes || 0}</button>
+                <button class="post-action-btn">💬 ${post.comments || 0}</button>
+                <button class="post-action-btn post-save-btn">📌</button>
+              </div>
+            `;
+            
+            feedPosts.appendChild(postCard);
+          });
+        }
+      }
+      
+      // Renderizar postagens existentes
+      renderPosts();
+      
+      // ✅ PUBLICAR NOVA POSTAGEM
+      publishBtn.addEventListener('click', () => {
+        const text = composeInput.value.trim();
+        if (!text) return;
+        
+        const newPost = {
+          id: 'post_' + Date.now(),
+          username: sessionStorage.getItem('username') || 'Usuário',
+          text: text,
+          time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          likes: 0,
+          comments: 0,
+          createdAt: Date.now()
+        };
+        
+        communityPosts.unshift(newPost);
+        localStorage.setItem(`community_${communityId}_posts`, JSON.stringify(communityPosts));
+        
+        composeInput.value = '';
+        renderPosts();
+      });
+      
+      // Publicar com Enter
+      composeInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          publishBtn.click();
+        }
+      });
+      
+       // ✅ RENDERIZAR SERVIDORES NA BARRA INFERIOR (MESMO SISTEMA DO INDEX.HTML)
+       setTimeout(() => {
+         if (window.renderServersRail) {
+           window.renderServersRail();
+         }
+       }, 100);
+       
+       // ✅ CHATS EM DESTAQUE FUNCIONAIS COM THUMBNAILS
+       const highlightsContainer = document.getElementById('featured-chats-list');
+       if (highlightsContainer) {
+         // Dados dos chats públicos
+         const publicChats = [
+           { id: 'chat_geral', name: 'Chat Geral', members: 127, online: 42, icon: '💬', lastMessage: 'Alguém aí quer jogar?' },
+           { id: 'chat_jogos', name: 'Jogos', members: 89, online: 31, icon: '🎮', lastMessage: 'Nova atualização lançada!' },
+           { id: 'chat_musica', name: 'Música', members: 64, online: 18, icon: '🎵', lastMessage: 'Qual música vocês estão ouvindo?' },
+           { id: 'chat_arte', name: 'Arte & Criação', members: 45, online: 12, icon: '🎨', lastMessage: 'Compartilhei meu novo desenho' },
+         ];
+         
+         // Renderizar chats com thumbnails
+         highlightsContainer.innerHTML = publicChats.map(chat => `
+           <div class="chat-item" data-chat-id="${chat.id}" style="cursor: pointer; transition: all 0.2s;">
+             <div class="chat-avatar" style="background: linear-gradient(135deg, #6600ff, #aa00ff);">${chat.icon}</div>
+             <div class="chat-info">
+               <div class="chat-name">${chat.name}</div>
+               <div class="chat-members">${chat.online} online · ${chat.members} membros</div>
+               <div style="font-size: 11px; color: #888; margin-top: 2px;">${chat.lastMessage}</div>
+             </div>
+             <div class="chat-online"></div>
+           </div>
+         `).join('');
+         
+        // Adicionar efeito hover e evento de clique
+        highlightsContainer.querySelectorAll('.chat-item').forEach(item => {
+          item.addEventListener('mouseenter', () => {
+            item.style.background = 'rgba(128,0,255,0.2)';
+            item.style.transform = 'translateX(4px)';
+          });
+          item.addEventListener('mouseleave', () => {
+            item.style.background = 'rgba(0,0,0,0.2)';
+            item.style.transform = 'translateX(0)';
+          });
+          
+          // ✅ ABRIR CHAT AO CLICAR
+          item.addEventListener('click', () => {
+            if (window.openPublicChat) {
+              window.openPublicChat();
+            } else {
+              // Fallback se a função ainda não carregou
+              setTimeout(() => window.openPublicChat(), 100);
+            }
+          });
+        });
+       }
+       
+       // ✅ REMOVER BARRA LATERAL DO INDEX.HTML QUE ESTÁ APARECENDO POR CONFLITO
+       const onlineSidebar = document.getElementById('online-sidebar');
+       if (onlineSidebar) {
+        onlineSidebar.classList.add('hidden');
+        onlineSidebar.style.display = 'none';
+        onlineSidebar.style.position = 'absolute';
+        onlineSidebar.style.left = '-9999px';
+      }
+      
+      // ✅ SISTEMA DE TAGS DA COMUNIDADE
+      const btnAcquireTag = document.getElementById('btn-acquire-tag');
+      
+      // Verificar se usuário já tem a tag
+      let userTags = JSON.parse(localStorage.getItem('user_community_tags') || '[]');
+      const alreadyHasTag = userTags.some(tag => tag.communityId === communityId);
+      
+      if (alreadyHasTag) {
+        btnAcquireTag.textContent = '✅ TAG ADQUIRIDA';
+        btnAcquireTag.style.background = 'rgba(0, 255, 136, 0.2)';
+        btnAcquireTag.style.borderColor = '#00ff88';
+        btnAcquireTag.style.color = '#00ff88';
+        btnAcquireTag.disabled = true;
+        btnAcquireTag.style.cursor = 'default';
+      }
+      
+      btnAcquireTag.addEventListener('click', () => {
+        if (alreadyHasTag) return;
+        
+        // Adicionar tag ao usuário
+        const newTag = {
+          id: `tag_${communityId}`,
+          communityId: communityId,
+          communityName: communityName || 'ZX Comunidade',
+          tagName: document.getElementById('community-tag-name').textContent,
+          acquiredAt: Date.now()
+        };
+        
+        userTags.push(newTag);
+        localStorage.setItem('user_community_tags', JSON.stringify(userTags));
+        
+        // Atualizar interface
+        btnAcquireTag.textContent = '✅ TAG ADQUIRIDA';
+        btnAcquireTag.style.background = 'rgba(0, 255, 136, 0.2)';
+        btnAcquireTag.style.borderColor = '#00ff88';
+        btnAcquireTag.style.color = '#00ff88';
+        btnAcquireTag.disabled = true;
+        btnAcquireTag.style.cursor = 'default';
+        
+        // Mostrar confirmação
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = '🏷️ Tag adquirida com sucesso! Ela aparecerá no seu perfil.';
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 3000);
+        
+        console.log('✅ Tag adquirida:', newTag);
+      });
+      
+      // ✅ SISTEMA DE CRIAÇÃO DE CHAT PÚBLICO (TODOS OS MEMBROS PODEM CRIAR)
+      const btnCreatePublicChat = document.getElementById('btn-create-public-chat');
+      const featuredChatsList = document.getElementById('featured-chats-list');
+      const featuredChatsEmpty = document.getElementById('featured-chats-empty');
+      
+      // Carregar chats existentes
+      let communityChats = JSON.parse(localStorage.getItem(`community_${communityId}_chats`) || '[]');
+      
+      function renderChats() {
+        featuredChatsList.innerHTML = '';
+        
+        if (communityChats.length === 0) {
+          featuredChatsEmpty.style.display = 'block';
+        } else {
+          featuredChatsEmpty.style.display = 'none';
+          
+          communityChats.forEach(chat => {
+            const chatItem = document.createElement('div');
+            chatItem.className = 'chat-item';
+            
+            chatItem.innerHTML = `
+              <div class="chat-avatar">💬</div>
+              <div class="chat-info">
+                <div class="chat-name">${chat.name}</div>
+                <div class="chat-members">Criado por ${chat.creator}</div>
+              </div>
+              <div class="chat-online"></div>
+            `;
+            
+            chatItem.addEventListener('click', () => {
+              if (window.openPublicChat) {
+                window.openPublicChat();
+              }
+            });
+            
+            chatItem.addEventListener('mouseenter', () => {
+              chatItem.style.background = 'rgba(128,0,255,0.2)';
+              chatItem.style.transform = 'translateX(4px)';
+            });
+            chatItem.addEventListener('mouseleave', () => {
+              chatItem.style.background = 'rgba(0,0,0,0.2)';
+              chatItem.style.transform = 'translateX(0)';
+            });
+            
+            featuredChatsList.appendChild(chatItem);
+          });
+        }
+      }
+      
+      // Renderizar chats existentes
+      renderChats();
+      
+      // ✅ MODAL DE CRIAÇÃO DE CHAT
+      const createChatModal = document.getElementById('create-chat-modal');
+      const createChatModalClose = document.getElementById('create-chat-modal-close');
+      const btnConfirmCreateChat = document.getElementById('btn-confirm-create-chat');
+      
+      const chatNameInput = document.getElementById('chat-name-input');
+      const chatDescInput = document.getElementById('chat-desc-input');
+      const chatRulesInput = document.getElementById('chat-rules-input');
+      
+      // Abrir modal
+      btnCreatePublicChat.addEventListener('click', () => {
+        createChatModal.classList.remove('hidden');
+        chatNameInput.value = '';
+        chatDescInput.value = '';
+        chatRulesInput.value = '';
+        document.querySelector('input[name="chat-visibility"][value="public"]').checked = true;
+      });
+      
+      // Fechar modal
+      createChatModalClose.addEventListener('click', () => {
+        createChatModal.classList.add('hidden');
+      });
+      
+      // Fechar modal ao clicar fora
+      createChatModal.addEventListener('click', (e) => {
+        if (e.target === createChatModal) {
+          createChatModal.classList.add('hidden');
+        }
+      });
+      
+      // ✅ CONFIRMAR CRIAÇÃO DO CHAT
+      btnConfirmCreateChat.addEventListener('click', () => {
+        const name = chatNameInput.value.trim();
+        const desc = chatDescInput.value.trim();
+        const rules = chatRulesInput.value.trim();
+        const visibility = document.querySelector('input[name="chat-visibility"]:checked').value;
+        
+        if (name.length < 2) {
+          alert('Digite um nome válido para o chat');
+          return;
+        }
+        
+        const newChat = {
+          id: 'chat_' + Date.now(),
+          name: name,
+          description: desc,
+          rules: rules,
+          visibility: visibility,
+          creator: sessionStorage.getItem('username') || 'Usuário',
+          createdAt: Date.now(),
+          members: 1
+        };
+        
+        communityChats.unshift(newChat);
+        localStorage.setItem(`community_${communityId}_chats`, JSON.stringify(communityChats));
+        
+        renderChats();
+        createChatModal.classList.add('hidden');
+        
+        // Mostrar confirmação
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = `✅ Chat "${name}" criado com sucesso!`;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 3000);
+      });
+      
+      // ✅ SISTEMA DE NAVEGAÇÃO DAS ABAS
+      const navButtons = document.querySelectorAll('.community-nav .nav-btn');
+      
+      navButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          // Remover classe active de todos
+          navButtons.forEach(b => b.classList.remove('active'));
+          
+          // Adicionar classe active no botão clicado
+          btn.classList.add('active');
+          
+          const tab = btn.dataset.navTab;
+          
+          // Mostrar toast informando que a aba foi selecionada
+          const tabNames = {
+            feed: 'Feed de postagens',
+            galeria: 'Galeria de fotos',
+            avisos: 'Avisos da comunidade',
+            regras: 'Regras da comunidade',
+            salvos: 'Conteúdo salvo',
+            perguntas: 'Enquetes e perguntas'
+          };
+          
+          const toast = document.createElement('div');
+          toast.className = 'toast';
+          toast.textContent = `✅ ${tabNames[tab]} selecionado`;
+          document.body.appendChild(toast);
+          
+          setTimeout(() => toast.remove(), 2000);
+          
+          console.log('✅ Aba navegada para:', tab);
+        });
+      });
+      
+      // ✅ SISTEMA DE NAVEGAÇÃO POR ABAS - IMPLEMENTAÇÃO COMPLETA
+      const tabs = ['feed', 'gallery', 'announcements', 'rules', 'saved', 'polls'];
+
+      window.switchTab = function(tabName) {
+        // Esconde todos os containers de conteúdo
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.add('hidden');
+        });
+        
+        // Mostra apenas o container da aba selecionada
+        const activeContent = document.getElementById(`tab-${tabName}`);
+        if (activeContent) {
+          activeContent.classList.remove('hidden');
+        }
+        
+        // Atualiza classe active nos botões de navegação
+        document.querySelectorAll('.nav-tab').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        document.getElementById(`tab-btn-${tabName}`)?.classList.add('active');
+        
+        // Atualiza também o menu lateral
+        document.querySelectorAll('.community-nav .nav-btn').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        const tabMap = {
+          'feed': 'feed',
+          'gallery': 'galeria',
+          'announcements': 'avisos',
+          'rules': 'regras',
+          'saved': 'salvos',
+          'polls': 'perguntas'
+        };
+        document.querySelector(`.community-nav .nav-btn[data-nav-tab="${tabMap[tabName]}"]`)?.classList.add('active');
+        
+        // Renderiza o conteúdo específico da aba
+        if (tabName === 'gallery') renderGallery();
+        if (tabName === 'announcements') renderAnnouncements();
+        if (tabName === 'rules') loadRules();
+        if (tabName === 'saved') renderSavedPosts();
+        if (tabName === 'polls') renderPolls();
+        if (tabName === 'feed') renderPosts();
+      }
+
+      // ✅ Sincronizar menu lateral com abas superiores
+      document.querySelectorAll('.community-nav .nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tabMapReverse = {
+            'feed': 'feed',
+            'galeria': 'gallery',
+            'avisos': 'announcements',
+            'regras': 'rules',
+            'salvos': 'saved',
+            'perguntas': 'polls'
+          };
+          const tab = btn.dataset.navTab;
+          switchTab(tabMapReverse[tab]);
+        });
+      });
+
+      // ✅ FUNÇÕES DA GALERIA
+      window.renderGallery = function() {
+        const galleryGrid = document.getElementById('gallery-grid');
+        const galleryEmpty = document.getElementById('gallery-empty');
+        const images = JSON.parse(localStorage.getItem(`community_${communityId}_gallery`) || '[]');
+        
+        galleryGrid.innerHTML = '';
+        
+        if (images.length === 0) {
+          galleryEmpty.classList.remove('hidden');
+        } else {
+          galleryEmpty.classList.add('hidden');
+          
+          images.forEach(imgSrc => {
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+            item.innerHTML = `<img src="${imgSrc}" alt="Galeria" />`;
+            galleryGrid.appendChild(item);
+          });
+        }
+      }
+
+      window.addGalleryImage = function() {
+        document.getElementById('gallery-file-input').click();
+      }
+
+      document.getElementById('gallery-file-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const images = JSON.parse(localStorage.getItem(`community_${communityId}_gallery`) || '[]');
+          images.unshift(event.target.result);
+          localStorage.setItem(`community_${communityId}_gallery`, JSON.stringify(images));
+          renderGallery();
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      // ✅ FUNÇÕES DOS AVISOS
+      document.getElementById('btn-add-announcement')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openAddAnnouncementModal();
+      });
+
+      window.renderAnnouncements = function() {
+        const list = document.getElementById('announcements-list');
+        const empty = document.getElementById('announcements-empty');
+        const announcements = JSON.parse(localStorage.getItem(`community_${communityId}_announcements`) || '[]');
+        
+        list.innerHTML = '';
+        
+        if (announcements.length === 0) {
+          empty.classList.remove('hidden');
+        } else {
+          empty.classList.add('hidden');
+          
+          announcements.forEach(ann => {
+            const card = document.createElement('div');
+            card.className = `announcement-card priority-${ann.priority}`;
+            card.innerHTML = `
+              <h4 style="color: #fff; margin: 0 0 8px 0;">${ann.title}</h4>
+              <p style="color: #aaa; margin: 0 0 8px 0; font-size: 14px;">${ann.description}</p>
+              <span style="color: #666; font-size: 12px;">${ann.date}</span>
+            `;
+            list.appendChild(card);
+          });
+        }
+
+        // Adicionar menu de contexto (botão direito)
+        document.getElementById('tab-announcements')?.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          openAddAnnouncementModal();
+        });
+      }
+
+      window.openAddAnnouncementModal = function() {
+        // REMOVE modal existente antes de criar novo
+        const existingModal = document.getElementById('announcement-modal');
+        if (existingModal) {
+          existingModal.remove();
+        }
+        
+        const modalHTML = `
+          <div id="announcement-modal" class="modal-overlay" style="display: flex;">
+            <div class="modal" style="max-width: 500px;">
+              <div class="mm-header">
+                <span class="mm-title">📢 Adicionar Aviso</span>
+                <button class="mm-close" onclick="closeAnnouncementModal()">✕</button>
+              </div>
+              <div style="padding: 1.5rem;">
+                <input type="text" id="announcement-title" placeholder="Título do aviso..." style="width: 100%; margin-bottom: 12px; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff;">
+                
+                <textarea id="announcement-desc" placeholder="Descrição do aviso..." style="width: 100%; min-height: 100px; margin-bottom: 12px; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; resize: vertical;"></textarea>
+                
+                <select id="announcement-priority" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; margin-bottom: 20px;">
+                  <option value="low">🟢 Prioridade Baixa</option>
+                  <option value="medium" selected>🟡 Prioridade Média</option>
+                  <option value="high">🔴 Prioridade Alta</option>
+                </select>
+                
+                <div style="display: flex; gap: 12px;">
+                  <button onclick="closeAnnouncementModal()" class="btn-ghost">Cancelar</button>
+                  <button onclick="saveAnnouncement()" class="btn-neon">✅ Publicar Aviso</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+      }
+
+      window.saveAnnouncement = function() {
+        const title = document.getElementById('announcement-title')?.value.trim();
+        const desc = document.getElementById('announcement-desc')?.value.trim();
+        const priority = document.getElementById('announcement-priority')?.value;
+        
+        if (!title) { alert('Digite o título do aviso'); return; }
+        if (!desc) { alert('Digite a descrição do aviso'); return; }
+        
+        const announcements = JSON.parse(localStorage.getItem(`community_${communityId}_announcements`) || '[]');
+        announcements.unshift({
+          title,
+          description: desc,
+          priority: priority,
+          date: new Date().toLocaleDateString('pt-BR'),
+          time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+        });
+        localStorage.setItem(`community_${communityId}_announcements`, JSON.stringify(announcements));
+        
+        closeAnnouncementModal();
+        renderAnnouncements();
+        
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = '✅ Aviso publicado com sucesso!';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+      }
+
+      window.closeAnnouncementModal = function() {
+        document.getElementById('announcement-modal')?.remove();
+      }
+
+      // ✅ FUNÇÕES DAS REGRAS
+      window.loadRules = function() {
+        const rules = localStorage.getItem(`community_${communityId}_rules`) || '';
+        document.getElementById('rules-editor').value = rules;
+      }
+
+      window.saveRules = function() {
+        const rules = document.getElementById('rules-editor').value;
+        localStorage.setItem(`community_${communityId}_rules`, rules);
+        alert('Regras salvas com sucesso!');
+      }
+
+      // ✅ FUNÇÕES DOS POSTS SALVOS
+      window.renderSavedPosts = function() {
+        const list = document.getElementById('saved-posts-list');
+        const empty = document.getElementById('saved-empty');
+        const saved = JSON.parse(localStorage.getItem(`community_${communityId}_saved`) || '[]');
+        
+        list.innerHTML = '';
+        
+        if (saved.length === 0) {
+          empty.classList.remove('hidden');
+        } else {
+          empty.classList.add('hidden');
+          
+          saved.forEach(post => {
+            const card = document.createElement('div');
+            card.className = 'post-card';
+            card.style.padding = '16px';
+            card.innerHTML = `
+              <div class="post-author">
+                <div class="post-avatar">👤</div>
+                <div class="post-author-info">
+                  <span class="post-username">${post.username}</span>
+                  <span class="post-time">${post.time}</span>
+                </div>
+              </div>
+              <div class="post-body" style="color: #ddd; font-size: 15px; margin: 8px 0 0 0;">${post.text}</div>
+            `;
+            list.appendChild(card);
+          });
+        }
+      }
+
+      // ✅ FUNÇÕES DAS PERGUNTAS/ENQUETES
+      window.renderPolls = function() {
+        const list = document.getElementById('polls-list');
+        const empty = document.getElementById('polls-empty');
+        const polls = JSON.parse(localStorage.getItem(`community_${communityId}_polls`) || '[]');
+        
+        list.innerHTML = '';
+        
+        if (polls.length === 0) {
+          empty.classList.remove('hidden');
+        } else {
+          empty.classList.add('hidden');
+          
+          polls.forEach((poll, idx) => {
+            const card = document.createElement('div');
+            card.className = 'poll-card';
+            
+            let optionsHtml = '';
+            poll.options.forEach((opt, optIdx) => {
+              const percent = poll.totalVotes > 0 ? Math.round((opt.votes / poll.totalVotes) * 100) : 0;
+              optionsHtml += `
+                <div class="poll-option" onclick="votePoll('${poll.id}', ${optIdx})">
+                  <div class="poll-progress" style="width: ${percent}%"></div>
+                  <div class="poll-content">
+                    <span class="poll-text">${opt.text}</span>
+                    <span class="poll-percent">${percent}%</span>
+                  </div>
+                </div>
+              `;
+            });
+            
+            card.innerHTML = `
+              <h4 style="color: #fff; margin: 0 0 12px 0;">${poll.question}</h4>
+              ${optionsHtml}
+              <div style="margin-top: 12px; color: #888; font-size: 12px;">${poll.totalVotes} votos</div>
+            `;
+            list.appendChild(card);
+          });
+        }
+      }
+
+      // ✅ MODAL DE CRIAÇÃO DE ENQUETE CORRIGIDO
+      document.getElementById('btn-create-poll')?.addEventListener('click', () => {
+        openCreatePollModal();
+      });
+
+      window.openCreatePollModal = function() {
+        // REMOVE modal existente antes de criar novo
+        const existingModal = document.getElementById('poll-modal');
+        if (existingModal) {
+          existingModal.remove();
+        }
+        
+        const modalHTML = `
+          <div id="poll-modal" class="modal-overlay" style="display: flex;">
+            <div class="modal" style="max-width: 500px;">
+              <div class="mm-header">
+                <span class="mm-title">📊 Criar Enquete</span>
+                <button class="mm-close" onclick="closePollModal()">✕</button>
+              </div>
+              <div style="padding: 1.5rem;">
+                <input type="text" id="poll-title" placeholder="Título da enquete..." style="width: 100%; margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff;">
+                
+                <div id="poll-options-container">
+                  <div class="poll-option-input" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <input type="text" placeholder="Opção 1" style="flex: 1; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 6px; color: #fff;">
+                  </div>
+                  <div class="poll-option-input" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <input type="text" placeholder="Opção 2" style="flex: 1; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 6px; color: #fff;">
+                  </div>
+                </div>
+                
+                <button id="btn-add-option" class="btn-ghost-sm" style="margin-bottom: 16px;">+ Adicionar opção</button>
+                
+                <div style="margin-bottom: 16px;">
+                  <label style="display: flex; align-items: center; gap: 8px; color: #fff;">
+                    <input type="checkbox" id="poll-multiple"> Permitir múltipla escolha
+                  </label>
+                </div>
+                
+                <select id="poll-duration" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 8px; color: #fff; margin-bottom: 20px;">
+                  <option value="24h">⏰ Duração: 24 horas</option>
+                  <option value="3d">⏰ Duração: 3 dias</option>
+                  <option value="7d">⏰ Duração: 7 dias</option>
+                  <option value="none">♾️ Sem data de expiração</option>
+                </select>
+                
+                <div style="display: flex; gap: 12px;">
+                  <button onclick="closePollModal()" class="btn-ghost">Cancelar</button>
+                  <button onclick="savePoll()" class="btn-neon">✅ Criar Enquete</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Adicionar evento para adicionar opções
+        setTimeout(() => {
+          document.getElementById('btn-add-option')?.addEventListener('click', () => {
+            const container = document.getElementById('poll-options-container');
+            const count = container.querySelectorAll('.poll-option-input').length + 1;
+            const newOption = document.createElement('div');
+            newOption.className = 'poll-option-input';
+            newOption.style = 'display: flex; gap: 8px; margin-bottom: 8px;';
+            newOption.innerHTML = `<input type="text" placeholder="Opção ${count}" style="flex: 1; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,255,0.3); border-radius: 6px; color: #fff;">`;
+            container.appendChild(newOption);
+          });
+        }, 100);
+      }
+
+      window.savePoll = function() {
+        const title = document.getElementById('poll-title')?.value.trim();
+        const optionInputs = document.querySelectorAll('#poll-options-container input');
+        const options = Array.from(optionInputs).map(inp => inp.value.trim()).filter(v => v);
+        const multipleChoice = document.getElementById('poll-multiple')?.checked || false;
+        const duration = document.getElementById('poll-duration')?.value;
+        
+        if (!title) { alert('Digite o título da enquete'); return; }
+        if (options.length < 2) { alert('Adicione pelo menos 2 opções'); return; }
+        
+        const poll = {
+          id: 'poll_' + Date.now(),
+          question: title,
+          options: options.map(text => ({ text, votes: 0 })),
+          multipleChoice,
+          duration,
+          createdAt: Date.now(),
+          totalVotes: 0,
+          createdBy: sessionStorage.getItem('username') || 'Usuário'
+        };
+        
+        const polls = JSON.parse(localStorage.getItem(`community_${communityId}_polls`) || '[]');
+        polls.unshift(poll);
+        localStorage.setItem(`community_${communityId}_polls`, JSON.stringify(polls));
+        
+        closePollModal();
+        renderPolls();
+        
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = '✅ Enquete criada com sucesso!';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+      }
+
+      window.closePollModal = function() {
+        document.getElementById('poll-modal')?.remove();
+      }
+
+      window.votePoll = function(pollId, optionIndex) {
+        const polls = JSON.parse(localStorage.getItem(`community_${communityId}_polls`) || '[]');
+        const poll = polls.find(p => p.id === pollId);
+        if (!poll) return;
+        
+        poll.options[optionIndex].votes++;
+        poll.totalVotes++;
+        localStorage.setItem(`community_${communityId}_polls`, JSON.stringify(polls));
+        renderPolls();
+      }
+
+      console.log('✅ Página da comunidade carregada com sucesso!');
+    });
+  </script>
+
+</body>
+</html>

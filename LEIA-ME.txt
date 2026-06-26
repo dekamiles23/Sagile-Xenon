@@ -1,0 +1,38 @@
+=============================================================
+  SAGILE ZX — INSTRUÇÕES DE INSTALAÇÃO DO SERVIDOR
+=============================================================
+
+PROBLEMA CORRIGIDO:
+  - Chamada de voz no DM privado dava "Sem conexão com o servidor"
+  - Agora há um servidor Socket.IO que precisa rodar junto com o app
+
+=============================================================
+COMO INSTALAR (PASSO A PASSO):
+=============================================================
+
+PASSO 1 — Copie os arquivos para o seu projeto Electron:
+  - Copie a pasta  "public/"   para dentro do seu projeto (substitua os arquivos)
+  - Copie a pasta  "uploads/"  para dentro do seu projeto
+  - Copie o arquivo "update-suggested-communities.js" para a raiz do projeto
+  - Copie a pasta  "servidor/" para dentro do seu projeto (NÃO misture com o resto)
+
+PASSO 2 — Instale as dependências do servidor (só na primeira vez):
+  - Abra o terminal
+  - Entre na pasta "servidor":   cd servidor
+  - Execute:                     npm install
+
+PASSO 3 — Inicie o servidor ANTES de abrir o app:
+  - No terminal, dentro da pasta "servidor":
+    npm start
+  - Deixe esse terminal aberto enquanto usa o app
+
+PASSO 4 — Abra o app Electron normalmente (como antes)
+  - Use seu atalho ou comando habitual para abrir o Electron
+  - A chamada de voz no DM agora vai funcionar!
+
+=============================================================
+IMPORTANTE:
+  - O servidor precisa estar rodando (Passo 3) ANTES de abrir o app
+  - NÃO substitua o package.json original do seu projeto Electron
+  - A pasta "servidor/" tem o próprio package.json separado
+=============================================================
