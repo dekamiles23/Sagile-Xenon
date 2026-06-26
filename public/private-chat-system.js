@@ -251,6 +251,25 @@
   var _isTyping = false;
   var _historyLoaded = {};
 
+  /* ─── Persistência local de histórico DM ─────────────────────────────── */
+  function dmStorageKey(a, b) {
+    return 'zx_dm_' + [a, b].map(function(x){ return (x||'').toLowerCase(); }).sort().join('_');
+  }
+  function loadLocalHistory(partner) {
+    try { return JSON.parse(localStorage.getItem(dmStorageKey(myUsername(), partner)) || '[]'); } catch(e) { return []; }
+  }
+  function saveLocalHistory(partner, messages) {
+    try { localStorage.setItem(dmStorageKey(myUsername(), partner), JSON.stringify(messages.slice(-200))); } catch(e) {}
+  }
+  function appendLocalHistory(partner, msg) {
+    var msgs = loadLocalHistory(partner);
+    // evita duplicatas por id
+    if (msg.id && msgs.some(function(m){ return m.id === msg.id; })) return msgs;
+    msgs.push(msg);
+    saveLocalHistory(partner, msgs);
+    return msgs;
+  }
+
   /* ─── Criar modal (somente uma vez) ──────────────────────────────────── */
   function createModal() {
     if (document.getElementById('private-chat-modal')) return;
@@ -446,9 +465,14 @@
 
   /* ─── Solicitar histórico ao servidor ────────────────────────────────── */
   function requestHistory(username) {
-    if (!window.socket || !window.socket.connected) return;
     _historyLoaded[username] = true;
-    window.socket.emit('dm:history', { with: username });
+    /* Carrega histórico local imediatamente */
+    var local = loadLocalHistory(username);
+    if (local.length > 0) renderDmHistory(local);
+    /* Depois busca do servidor para mesclar */
+    if (window.socket && window.socket.connected) {
+      window.socket.emit('dm:history', { with: username });
+    }
   }
 
   /* ─── Renderizar uma mensagem na área ────────────────────────────────── */
@@ -524,16 +548,23 @@
       if (typeof showToast === 'function') showToast('⚠️ Mensagem muito longa (máx 4000 caracteres)');
       return;
     }
-    if (!window.socket || !window.socket.connected) {
-      if (typeof showToast === 'function') showToast('❌ Sem conexão com o servidor');
-      return;
-    }
 
-    window.socket.emit('dm:message', {
+    var msg = {
+      id: Date.now() + '_' + Math.random().toString(36).slice(2),
       from: myUsername(),
       to: _currentDmUser,
-      text: text
-    });
+      text: text,
+      timestamp: Date.now()
+    };
+
+    /* Renderiza imediatamente sem esperar servidor */
+    renderDmMessage(msg);
+    appendLocalHistory(_currentDmUser, msg);
+
+    /* Envia ao servidor se conectado */
+    if (window.socket && window.socket.connected) {
+      window.socket.emit('dm:message', { from: msg.from, to: msg.to, text: msg.text, id: msg.id });
+    }
 
     /* Limpar input */
     input.value = '';
@@ -565,9 +596,19 @@
     socket.on('dm:history', function (data) {
       if (!data) return;
       var partner = data.with || '';
-      /* Só renderiza se a conversa aberta é com este parceiro */
       if (partner.toLowerCase() !== (_currentDmUser || '').toLowerCase()) return;
-      renderDmHistory(data.messages || []);
+      var serverMsgs = data.messages || [];
+      /* Mescla com histórico local */
+      var localMsgs = loadLocalHistory(partner);
+      var seen = {};
+      var merged = [];
+      serverMsgs.concat(localMsgs).forEach(function(m) {
+        var key = m.id || (m.from + m.timestamp);
+        if (!seen[key]) { seen[key] = true; merged.push(m); }
+      });
+      merged.sort(function(a,b){ return (a.timestamp||0)-(b.timestamp||0); });
+      saveLocalHistory(partner, merged);
+      renderDmHistory(merged);
     });
 
     /* Nova mensagem recebida */
@@ -575,29 +616,26 @@
       if (!msg) return;
       var sender = (msg.from || msg.username || '').toLowerCase();
       var me = myUsername().toLowerCase();
+      if (sender === me) return; /* já renderizamos localmente ao enviar */
 
-      /* Exibir se o chat com este usuário estiver aberto */
+      appendLocalHistory(sender, msg);
+
       if (_currentDmUser && sender === _currentDmUser.toLowerCase()) {
         renderDmMessage(msg);
-        /* Marcar como lida */
         if (window.socket && window.socket.connected) {
           socket.emit('dm:read', { from: _currentDmUser });
         }
-      } else if (sender !== me) {
-        /* Notificação toast para mensagens de outras janelas */
+      } else {
         if (typeof showToast === 'function') {
           showToast('💬 ' + (msg.from || 'Alguém') + ': ' + (msg.text || '').substring(0, 60));
         }
       }
     });
 
-    /* Confirmação de mensagem enviada (echo do servidor) */
+    /* Confirmação do servidor — ignora se já renderizamos localmente */
     socket.on('dm:message:sent', function (msg) {
       if (!msg) return;
-      var to = (msg.to || '').toLowerCase();
-      if (_currentDmUser && to === _currentDmUser.toLowerCase()) {
-        renderDmMessage(msg);
-      }
+      appendLocalHistory(msg.to || _currentDmUser || '', msg);
     });
 
     /* Indicador de digitação */
