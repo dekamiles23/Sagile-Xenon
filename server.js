@@ -13,7 +13,7 @@ let supabaseBackend;
 try { supabaseBackend = require('./supabase-backend'); } catch(_) {
   console.warn('[SERVER] supabase-backend não encontrado, rodando sem Supabase');
   const noop = async () => [];
-  supabaseBackend = { getCommunities: noop, createCommunity: noop, deleteCommunity: noop, getServers: noop, createServer: noop, updateServer: noop, deleteServer: noop, getServerChannels: noop, createServerChannel: noop, deleteServerChannel: noop, getShorts: noop, createShort: noop, deleteShort: noop, saveDmMessage: async () => {}, getDmHistory: noop, getFriends: noop, addFriendship: async () => {}, removeFriendship: async () => {} };
+  supabaseBackend = { getCommunities: noop, createCommunity: noop, deleteCommunity: noop, getServers: noop, createServer: noop, updateServer: noop, deleteServer: noop, getServerChannels: noop, createServerChannel: noop, deleteServerChannel: noop, getShorts: noop, createShort: noop, deleteShort: noop, saveServerMessage: async () => {}, getServerMessageHistory: noop, saveDmMessage: async () => {}, getDmHistory: noop, getFriends: noop, addFriendship: async () => {}, removeFriendship: async () => {} };
 }
 
 const app  = express();
@@ -139,7 +139,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Canal de servidor (chat) ──────────────────────────────────────────────
-  socket.on('switch-channel', (data) => {
+  socket.on('switch-channel', async (data) => {
     // Sai do canal anterior
     if (users[socket.id]?.room) socket.leave(users[socket.id].room);
     const room = `${data.serverId}:${data.channel}`;
@@ -149,28 +149,54 @@ io.on('connection', (socket) => {
       users[socket.id].channel = data.channel;
       users[socket.id].serverId = data.serverId;
     }
+    
+    // Busca histórico do Supabase e mescla com cache em memória
+    const dbMsgs = await supabaseBackend.getServerMessageHistory(data.serverId, data.channel);
+    const memMsgs = channelHistory[room] || [];
+    
+    // Deduplica por id
+    const seen = new Set(dbMsgs.map(m => m.id));
+    const merged = [...dbMsgs];
+    memMsgs.forEach(m => { if (!seen.has(m.id)) merged.push(m); });
+    merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    
+    // Atualiza cache local
+    channelHistory[room] = merged.slice(-500);
+    
     // Envia histórico
-    const hist = channelHistory[room] || [];
-    socket.emit('history', hist.slice(-100));
+    socket.emit('history', channelHistory[room].slice(-100));
   });
 
   socket.on('message', (data) => {
     const room = users[socket.id]?.room;
     if (!room) return;
+    const [serverId, channel] = room.split(':');
+    // Usa o username registrado no servidor como fallback seguro
+    const resolvedUsername = data.username || users[socket.id]?.username || 'Anônimo';
+    const resolvedAvatar   = data.avatar   || users[socket.id]?.avatar   || null;
+    const now = new Date();
     const msg = {
       id:        Date.now() + '_' + Math.random().toString(36).slice(2),
-      username:  data.username || 'Anônimo',
-      avatar:    data.avatar   || null,
+      serverId:  serverId || null,
+      channel:  channel || 'geral',
+      username:  resolvedUsername,
+      avatar:    resolvedAvatar,
       text:      data.text     || data.content || '',
       timestamp: Date.now(),
+      time:      now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       type:      data.type || 'text',
       media:     data.media || null
     };
     if (!channelHistory[room]) channelHistory[room] = [];
     channelHistory[room].push(msg);
     if (channelHistory[room].length > 500) channelHistory[room].shift();
+    
+    // Persiste no Supabase (fire-and-forget)
+    supabaseBackend.saveServerMessage(msg).catch(() => {});
+    
+    // Envia para todos na sala (incluindo o remetente) - evita duplicação
+    // Não emite message:sent separado para evitar renderização dupla no remetente
     io.to(room).emit('message', msg);
-    socket.emit('message:sent', { ...msg, status: 'delivered' });
   });
 
   // ── DM (mensagens diretas) ────────────────────────────────────────────────
