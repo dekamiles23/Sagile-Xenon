@@ -9,6 +9,7 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
 const fs      = require('fs');
+const sb      = require('./supabase-backend');
 
 const app  = express();
 const server = http.createServer(app);
@@ -154,21 +155,29 @@ io.on('connection', (socket) => {
   });
 
   // ── DM (mensagens diretas) ────────────────────────────────────────────────
-  socket.on('dm:history', (data) => {
+  socket.on('dm:history', async (data) => {
     const me   = users[socket.id]?.username;
     const them = data?.with;
     if (!me || !them) return;
     const key  = dmKey(me, them);
-    socket.emit('dm:history', { with: them, messages: (dmHistory[key] || []).slice(-100) });
+    // Busca do Supabase e mescla com cache em memória
+    const dbMsgs  = await sb.getDmHistory(me, them);
+    const memMsgs = dmHistory[key] || [];
+    const seen = new Set(dbMsgs.map(m => m.id));
+    const merged = [...dbMsgs];
+    memMsgs.forEach(m => { if (!seen.has(m.id)) merged.push(m); });
+    merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    dmHistory[key] = merged.slice(-500);
+    socket.emit('dm:history', { with: them, messages: dmHistory[key].slice(-100) });
   });
 
-  socket.on('dm:message', (data) => {
+  socket.on('dm:message', async (data) => {
     const from = data?.from || users[socket.id]?.username;
     const to   = data?.to;
     if (!from || !to) return;
 
     const msg = {
-      id:        Date.now() + '_' + Math.random().toString(36).slice(2),
+      id:        data.id || (Date.now() + '_' + Math.random().toString(36).slice(2)),
       from,
       to,
       text:      data.text || data.content || '',
@@ -180,8 +189,14 @@ io.on('connection', (socket) => {
 
     const key = dmKey(from, to);
     if (!dmHistory[key]) dmHistory[key] = [];
-    dmHistory[key].push(msg);
-    if (dmHistory[key].length > 500) dmHistory[key].shift();
+    // Evita duplicata na memória
+    if (!dmHistory[key].find(m => m.id === msg.id)) {
+      dmHistory[key].push(msg);
+      if (dmHistory[key].length > 500) dmHistory[key].shift();
+    }
+
+    // Persiste no Supabase
+    sb.saveDmMessage(msg).catch(() => {});
 
     // Envia ao remetente
     socket.emit('dm:message:sent', msg);
