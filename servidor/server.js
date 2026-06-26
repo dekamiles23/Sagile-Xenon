@@ -23,8 +23,9 @@ const io   = new Server(server, {
 const PORT = process.env.PORT || 3002;
 
 // ─── Servir arquivos estáticos ───────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+app.use(express.static(PUBLIC_DIR));
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use(express.json({ limit: '10mb' }));
 
 // ─── Estado em memória ───────────────────────────────────────────────────────
@@ -531,7 +532,7 @@ io.on('connection', (socket) => {
 
 // ─── Rota raiz ────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
 // ─── Iniciar servidor (com auto-kill da instância anterior) ─────────────────
