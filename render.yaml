@@ -11,6 +11,6 @@ services:
       - key: PORT
         value: 10000
       - key: SUPABASE_URL
-        value: https://mescdtlvpqblhlqtvnlm.supabase.co
+        sync: false
       - key: SUPABASE_SERVICE_KEY
-        value: sb_secret_GEsYmczQKJip2Ejvj7N06A_WFHHjXRq
+        sync: false
