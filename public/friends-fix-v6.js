@@ -10,11 +10,11 @@
   'use strict';
 
   // ── Estado ──────────────────────────────────────────────────────────────────
-  var friends         = []; // Carregado do Supabase, não do localStorage
+  var friends         = JSON.parse(localStorage.getItem('zx_friends') || '[]');
   var friendRequests  = JSON.parse(localStorage.getItem('zx_friend_requests')|| '[]');
   var sentRequests    = JSON.parse(localStorage.getItem('zx_sent_requests')  || '[]');
   var activityLog     = JSON.parse(localStorage.getItem('zx_friend_log')     || '[]');
-  var friendsLoadedFromServer = false; // Flag para saber se já carregou do Supabase
+  var friendsLoadedFromServer = false;
 
   function save() {
     localStorage.setItem('zx_friends',          JSON.stringify(friends));
@@ -273,13 +273,18 @@
         friendRequests = friendRequests.filter(function (r) {
           return (typeof r === 'string' ? r : r.from) !== uname;
         });
+        // Adiciona imediatamente no array local (permanente via localStorage)
+        if (friends.indexOf(uname) === -1) friends.push(uname);
         save();
+        window.friends = friends.slice();
+        window.__zxFriends = friends.slice();
         if (window.socket && window.socket.connected) {
           window.socket.emit('friend:accept', { from: myName(), to: uname });
         }
         addLog('Você aceitou a solicitação de ' + uname);
-        // Não adiciona localmente - espera o servidor salvar no Supabase e recarregar via friends:loaded
         renderFriendsModal();
+        if (typeof window.renderDmList === 'function') window.renderDmList();
+        dispatchUpdated();
       });
     });
 
@@ -451,25 +456,34 @@
       var by = data && (data.by || data.from);
       if (!by) return;
       sentRequests = sentRequests.filter(function (r) { return r !== by; });
-      // Recarrega amigos do Supabase para garantir consistência
+      if (friends.indexOf(by) === -1) friends.push(by);
+      save();
+      window.friends = friends.slice();
+      window.__zxFriends = friends.slice();
+      addLog(by + ' aceitou sua solicitação de amizade');
+      renderFriendsModal();
+      if (typeof window.renderDmList === 'function') window.renderDmList();
+      dispatchUpdated();
+      if (typeof showToast === 'function') showToast('🎉 ' + by + ' aceitou sua solicitação!');
+      // Sincroniza com Supabase em segundo plano
       var uname = myName();
       if (uname && uname !== 'Eu' && window.socket && window.socket.connected) {
         window.socket.emit('friends:load', { username: uname });
       }
-      addLog(by + ' aceitou sua solicitação de amizade');
-      if (typeof showToast === 'function') showToast('🎉 ' + by + ' aceitou sua solicitação!');
     });
 
     // Amigo removido
     socket.on('friend:removed', function (data) {
       var by = data && (data.by || data.from);
       if (!by) return;
-      // Recarrega amigos do Supabase para garantir consistência
-      var uname = myName();
-      if (uname && uname !== 'Eu' && window.socket && window.socket.connected) {
-        window.socket.emit('friends:load', { username: uname });
-      }
+      friends = friends.filter(function (f) { return f !== by; });
+      save();
+      window.friends = friends.slice();
+      window.__zxFriends = friends.slice();
       addLog(by + ' removeu você dos amigos');
+      renderFriendsModal();
+      if (typeof window.renderDmList === 'function') window.renderDmList();
+      dispatchUpdated();
     });
 
     // Cancelamento de solicitação recebida
