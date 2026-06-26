@@ -20,7 +20,7 @@ const io   = new Server(server, {
   maxHttpBufferSize: 10e6
 });
 
-const PORT = 3002;
+const PORT = process.env.PORT || 3002;
 
 // ─── Servir arquivos estáticos ───────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
@@ -36,6 +36,7 @@ const feedPosts      = [];   // global feed
 const userIdMap      = {};   // username.lower -> userId
 const communities    = {};   // id -> community obj
 const shorts         = [];   // array of short objects
+const dmVoiceRooms   = {};   // roomKey -> [{ socketId, username, avatar }]
 
 function dmKey(a, b) {
   return [a, b].sort().join('|');
@@ -72,25 +73,6 @@ io.on('connection', (socket) => {
   }
   socket.on('user:heartbeat', registerUser);
   socket.on('user:login',     registerUser);
-
-
-  // ── Heartbeat / identificação do usuário ─────────────────────────────────
-function registerUser(data) {
-  const username = data?.username || data?.user || null;
-  if (!username) return;
-  users[socket.id] = {
-    ...(users[socket.id] || {}),
-    username,
-    avatar: data?.avatar || users[socket.id]?.avatar || null,
-    status: data?.status || 'online',
-    socketId: socket.id
-  };
-  socket.username = username;
-  if (data?.userId) userIdMap[username.toLowerCase()] = data.userId;
-  broadcastOnlineUsers();
-}
-socket.on('user:heartbeat', registerUser);
-socket.on('user:login',     registerUser);
 
 
   socket.on('user:status', (data) => {
@@ -514,7 +496,7 @@ socket.on('user:login',     registerUser);
     socket.join(room);
     socket.emit('dm:voice-room:peers', { peers, roomKey });
     socket.to(room).emit('dm:voice-room:user-joined', { socketId: socket.id, username: uname, roomKey });
-    if (toUser) _voiceEmit(null, toUser, 'dm:voice-room:notification', { from: uname, roomKey, action: 'joined' });
+    if (toUser) { const toSid = findSocket(toUser); if (toSid) io.to(toSid).emit('dm:voice-room:notification', { from: uname, roomKey, action: 'joined' }); }
     io.to(room).emit('dm:voice-room:users', { users: dmVoiceRooms[roomKey], roomKey });
     console.log('[DM-VOICE-ROOM] ' + uname + ' entrou em ' + roomKey);
   });

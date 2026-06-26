@@ -9,7 +9,12 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
 const fs      = require('fs');
-const supabaseBackend = require('./supabase-backend');
+let supabaseBackend;
+try { supabaseBackend = require('./supabase-backend'); } catch(_) {
+  console.warn('[SERVER] supabase-backend não encontrado, rodando sem Supabase');
+  const noop = async () => [];
+  supabaseBackend = { getCommunities: noop, createCommunity: noop, deleteCommunity: noop, getServers: noop, createServer: noop, updateServer: noop, deleteServer: noop, getServerChannels: noop, createServerChannel: noop, deleteServerChannel: noop, getShorts: noop, createShort: noop, deleteShort: noop, saveDmMessage: async () => {}, getDmHistory: noop, getFriends: noop, addFriendship: async () => {}, removeFriendship: async () => {} };
+}
 
 const app  = express();
 const server = http.createServer(app);
@@ -895,8 +900,8 @@ app.get('/', (req, res) => {
 
 // ─── Iniciar servidor ────────────────────────────────────────────────────────
 function startListen(port) {
-  server.listen(port, '127.0.0.1', () => {
-    console.log(`✅ Servidor ZX rodando em http://localhost:${port}`);
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`✅ Servidor ZX rodando em http://0.0.0.0:${port}`);
     if (process.send) process.send({ type: 'ready', port });
   });
 }
