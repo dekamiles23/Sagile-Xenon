@@ -3,7 +3,8 @@ services:
     name: mega-zx-server
     env: node
     plan: free
-    buildCommand: npm install --omit=dev
+    rootDir: servidor
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
