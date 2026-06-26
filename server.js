@@ -9,6 +9,7 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
 const fs      = require('fs');
+const supabaseBackend = require('./supabase-backend');
 
 const app  = express();
 const server = http.createServer(app);
@@ -20,11 +21,13 @@ const io   = new Server(server, {
   maxHttpBufferSize: 10e6
 });
 
-const PORT = 3002;
+const PORT = process.env.PORT || 3002;
+const APP_DIR = process.env.APP_DIR || __dirname;
+const USER_DATA_DIR = process.env.USER_DATA_DIR || __dirname;
 
 // ─── Servir arquivos estáticos ───────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(APP_DIR, 'public')));
+app.use('/uploads', express.static(path.join(USER_DATA_DIR, 'uploads')));
 app.use(express.json({ limit: '10mb' }));
 
 // ─── Estado em memória ───────────────────────────────────────────────────────
@@ -32,10 +35,15 @@ const users          = {};   // socketId -> { username, avatar, status, channel,
 const dmHistory      = {};   // "a|b" (sorted) -> [msg, ...]
 const channelHistory = {};   // "serverId:channel" -> [msg, ...]
 const voiceRooms     = {};   // "serverId:channel" -> [{ username, avatar }]
+const dmVoiceRooms   = {};   // "dm-voice-room:roomKey" -> [{ socketId, username, avatar }]
 const feedPosts      = [];   // global feed
 const userIdMap      = {};   // username.lower -> userId
 const communities    = {};   // id -> community obj
 const shorts         = [];   // array of short objects
+
+// ─── Salas privadas ───────────────────────────────────────────────────────────
+const privateRooms   = {};   // roomId -> { id, name, createdBy, members: [], messages: [] }
+const userRooms      = {};   // username.lower -> [roomId, ...]
 
 function dmKey(a, b) {
   return [a, b].sort().join('|');
@@ -51,11 +59,10 @@ function broadcastOnlineUsers() {
 }
 
 // ─── Conexão Socket.IO ───────────────────────────────────────────────────────
-// ─── Conexão Socket.IO
 io.on('connection', (socket) => {
   console.log('[SERVER] Nova conexão:', socket.id);
 
-  // ── Heartbeat / identificação do usuário
+  // ── Heartbeat / identificação do usuário ─────────────────────────────────
   function registerUser(data) {
     const username = data?.username || data?.user || null;
     if (!username) return;
@@ -68,30 +75,21 @@ io.on('connection', (socket) => {
     };
     socket.username = username;
     if (data?.userId) userIdMap[username.toLowerCase()] = data.userId;
+    console.log('[SERVER] Usuário registrado:', username, '| socket:', socket.id);
     broadcastOnlineUsers();
   }
+
   socket.on('user:heartbeat', registerUser);
   socket.on('user:login',     registerUser);
 
-
-  // ── Heartbeat / identificação do usuário ─────────────────────────────────
-function registerUser(data) {
-  const username = data?.username || data?.user || null;
-  if (!username) return;
-  users[socket.id] = {
-    ...(users[socket.id] || {}),
-    username,
-    avatar: data?.avatar || users[socket.id]?.avatar || null,
-    status: data?.status || 'online',
-    socketId: socket.id
-  };
-  socket.username = username;
-  if (data?.userId) userIdMap[username.toLowerCase()] = data.userId;
-  broadcastOnlineUsers();
-}
-socket.on('user:heartbeat', registerUser);
-socket.on('user:login',     registerUser);
-
+  // Carregar amigos do Supabase ao logar
+  socket.on('friends:load', async (data) => {
+    const username = (data?.username || users[socket.id]?.username || '').toLowerCase();
+    if (!username) return;
+    const friends = await supabaseBackend.getFriends(username);
+    console.log('[FRIEND] friends:load para', username, '→', friends.length, 'amigos');
+    socket.emit('friends:loaded', { friends });
+  });
 
   socket.on('user:status', (data) => {
     if (!data?.username) return;
@@ -171,12 +169,26 @@ socket.on('user:login',     registerUser);
   });
 
   // ── DM (mensagens diretas) ────────────────────────────────────────────────
-  socket.on('dm:history', (data) => {
+  socket.on('dm:history', async (data) => {
     const me   = users[socket.id]?.username;
     const them = data?.with;
     if (!me || !them) return;
     const key  = dmKey(me, them);
-    socket.emit('dm:history', { with: them, messages: (dmHistory[key] || []).slice(-100) });
+
+    // Busca do Supabase e mescla com cache em memória
+    const dbMsgs = await supabaseBackend.getDmHistory(me, them);
+    const memMsgs = dmHistory[key] || [];
+
+    // Deduplica por id
+    const seen = new Set(dbMsgs.map(m => m.id));
+    const merged = [...dbMsgs];
+    memMsgs.forEach(m => { if (!seen.has(m.id)) merged.push(m); });
+    merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+    // Atualiza cache local
+    dmHistory[key] = merged.slice(-500);
+
+    socket.emit('dm:history', { with: them, messages: dmHistory[key].slice(-100) });
   });
 
   socket.on('dm:message', (data) => {
@@ -199,6 +211,9 @@ socket.on('user:login',     registerUser);
     if (!dmHistory[key]) dmHistory[key] = [];
     dmHistory[key].push(msg);
     if (dmHistory[key].length > 500) dmHistory[key].shift();
+
+    // Persiste no Supabase (fire-and-forget)
+    supabaseBackend.saveDmMessage(msg).catch(() => {});
 
     // Envia ao remetente
     socket.emit('dm:message:sent', msg);
@@ -224,6 +239,126 @@ socket.on('user:login',     registerUser);
     }
   });
 
+  // ── Salas privadas ─────────────────────────────────────────────────────────
+  // Criar uma sala privada
+  socket.on('private-room:create', (data) => {
+    const username = users[socket.id]?.username;
+    if (!username) return;
+
+    const roomId = 'private_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const roomName = data?.name || 'Sala Privada';
+
+    privateRooms[roomId] = {
+      id: roomId,
+      name: roomName,
+      createdBy: username,
+      createdAt: Date.now(),
+      members: [username],
+      messages: []
+    };
+
+    const userKey = username.toLowerCase();
+    if (!userRooms[userKey]) userRooms[userKey] = [];
+    userRooms[userKey].push(roomId);
+
+    socket.join(roomId);
+    socket.emit('private-room:created', { roomId, name: roomName });
+  });
+
+  // Listar salas do usuário
+  socket.on('private-room:list', () => {
+    const username = users[socket.id]?.username;
+    if (!username) return;
+
+    const userKey = username.toLowerCase();
+    const roomIds = userRooms[userKey] || [];
+    const rooms = roomIds.map(id => privateRooms[id]).filter(Boolean);
+
+    socket.emit('private-room:list', rooms);
+  });
+
+  // Entrar em uma sala privada
+  socket.on('private-room:join', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    if (!username || !roomId || !privateRooms[roomId]) return;
+
+    const room = privateRooms[roomId];
+
+    if (!room.members.includes(username)) {
+      room.members.push(username);
+      const userKey = username.toLowerCase();
+      if (!userRooms[userKey]) userRooms[userKey] = [];
+      if (!userRooms[userKey].includes(roomId)) {
+        userRooms[userKey].push(roomId);
+      }
+    }
+
+    socket.join(roomId);
+    socket.emit('private-room:joined', { roomId, name: room.name });
+    io.to(roomId).emit('private-room:user-joined', { username, roomId });
+
+    socket.emit('private-room:history', { roomId, messages: room.messages.slice(-100) });
+  });
+
+  // Sair de uma sala privada
+  socket.on('private-room:leave', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    if (!username || !roomId) return;
+
+    socket.leave(roomId);
+    io.to(roomId).emit('private-room:user-left', { username, roomId });
+  });
+
+  // Enviar mensagem em sala privada
+  socket.on('private-room:message', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    if (!username || !roomId || !privateRooms[roomId]) return;
+
+    const room = privateRooms[roomId];
+    if (!room.members.includes(username)) return;
+
+    const msg = {
+      id: Date.now() + '_' + Math.random().toString(36).slice(2),
+      username,
+      avatar: users[socket.id]?.avatar || null,
+      text: data?.text || '',
+      timestamp: Date.now(),
+      type: data?.type || 'text',
+      media: data?.media || null
+    };
+
+    room.messages.push(msg);
+    if (room.messages.length > 500) room.messages.shift();
+
+    io.to(roomId).emit('private-room:message', { ...msg, roomId });
+  });
+
+  // Convidar usuário para sala privada
+  socket.on('private-room:invite', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    const targetUsername = data?.username;
+    if (!username || !roomId || !targetUsername) return;
+
+    const room = privateRooms[roomId];
+    if (!room || room.createdBy !== username) return;
+
+    const targetSocket = Object.entries(users).find(([, u]) =>
+      u.username?.toLowerCase() === targetUsername.toLowerCase()
+    );
+
+    if (targetSocket) {
+      io.to(targetSocket[0]).emit('private-room:invited', {
+        roomId,
+        roomName: room.name,
+        invitedBy: username
+      });
+    }
+  });
+
   socket.on('dm:read', (data) => {
     const me   = data?.from || users[socket.id]?.username;
     const from = data?.from;
@@ -236,22 +371,47 @@ socket.on('user:login',     registerUser);
     }
   });
 
-    // ── Amizades
+  // ── Amizades ──────────────────────────────────────────────────────────────────
   socket.on('friend:request', (data) => {
     const from = data?.from || users[socket.id]?.username;
     const to   = data?.to;
     if (!from || !to) return;
+    console.log('[FRIEND] request from=' + from + ' to=' + to);
+    console.log('[FRIEND] Usuários online:', Object.keys(users).map(sid => users[sid].username));
     const toSid = findSocket(to);
+    console.log('[FRIEND] Socket do destinatário (' + to + '):', toSid);
+    // Confirma para quem enviou
     socket.emit('friend:request:sent', { to, offline: !toSid });
-    if (toSid) io.to(toSid).emit('friend:request', { from, avatar: data?.avatar || null });
+    // Encaminha para o destinatário (se online)
+    if (toSid) {
+      io.to(toSid).emit('friend:request', { from, avatar: data?.avatar || null });
+      console.log('[FRIEND] request encaminhado para', toSid);
+    } else {
+      console.log('[FRIEND] destinatario offline, notificacao salva');
+    }
   });
 
-  socket.on('friend:accept', (data) => {
+  socket.on('friend:accept', async (data) => {
     const from = data?.from || users[socket.id]?.username;
     const to   = data?.to;
     if (!from || !to) return;
+    console.log('[FRIEND] accept from=' + from + ' to=' + to);
+    // Persiste amizade no Supabase
+    await supabaseBackend.addFriendship(from, to);
+    console.log('[FRIEND] Amizade salva no Supabase entre', from, 'e', to);
+    // Notifica o outro usuário
     const toSid = findSocket(to);
-    if (toSid) io.to(toSid).emit('friend:accepted', { by: from, avatar: data?.avatar || null });
+    if (toSid) {
+      io.to(toSid).emit('friend:accepted', { by: from, avatar: data?.avatar || null });
+      // Envia lista atualizada para o outro usuário também
+      const toFriends = await supabaseBackend.getFriends(to.toLowerCase());
+      console.log('[FRIEND] Enviando lista de amigos para', to, ':', toFriends);
+      io.to(toSid).emit('friends:loaded', { friends: toFriends });
+    }
+    // Envia lista atualizada para quem aceitou (para refletir imediatamente sem depender do localStorage)
+    const fromFriends = await supabaseBackend.getFriends(from.toLowerCase());
+    console.log('[FRIEND] Enviando lista de amigos para', from, ':', fromFriends);
+    socket.emit('friends:loaded', { friends: fromFriends });
   });
 
   socket.on('friend:reject', (data) => {
@@ -262,12 +422,17 @@ socket.on('user:login',     registerUser);
     if (toSid) io.to(toSid).emit('friend:rejected', { by: from });
   });
 
-  socket.on('friend:remove', (data) => {
+  socket.on('friend:remove', async (data) => {
     const from = data?.from || users[socket.id]?.username;
     const to   = data?.to;
     if (!from || !to) return;
+    // Remove amizade do Supabase
+    await supabaseBackend.removeFriendship(from, to);
     const toSid = findSocket(to);
     if (toSid) io.to(toSid).emit('friend:removed', { by: from });
+    // Envia lista atualizada para quem removeu
+    const fromFriends = await supabaseBackend.getFriends(from.toLowerCase());
+    socket.emit('friends:loaded', { friends: fromFriends });
   });
 
   socket.on('friend:cancel', (data) => {
@@ -278,7 +443,7 @@ socket.on('user:login',     registerUser);
     const toSid = findSocket(to);
     if (toSid) io.to(toSid).emit('friend:request:cancelled', { by: from });
   });
-  
+
   // ── Chamadas de voz DM (WebRTC signaling) ────────────────────────────────
   function findSocket(username) {
     if (!username) return null;
@@ -289,44 +454,41 @@ socket.on('user:login',     registerUser);
   }
 
   socket.on('dm:call:start', (data) => {
-    const toSid = findSocket(data?.to);
+    const from = data.from || users[socket.id]?.username;
+    const to   = data?.to;
+    const toSid = findSocket(to);
+    console.log('[CALL] dm:call:start from=' + from + ' to=' + to + ' toSid=' + toSid);
+    console.log('[CALL] usuarios online:', Object.values(users).map(u => u.username));
     if (toSid) {
-      io.to(toSid).emit('dm:call:start', {
-        from:   data.from   || users[socket.id]?.username,
-        fromId: data.fromId || null,
-        to:     data.to,
-        toId:   data.toId   || null
-      });
+      io.to(toSid).emit('dm:call:incoming', { from, fromId: data.fromId || null, to, toId: data.toId || null });
+      console.log('[CALL] dm:call:incoming enviado para', toSid);
+    } else {
+      console.log('[CALL] ERRO: usuario "' + to + '" nao encontrado nos users conectados');
+      socket.emit('dm:call:error', { message: 'Usuário "' + to + '" não está online ou não enviou heartbeat' });
     }
   });
 
   socket.on('dm:call:accept', (data) => {
     const toSid = findSocket(data?.to);
+    console.log('[CALL] dm:call:accept to=' + data?.to + ' toSid=' + toSid);
     if (toSid) {
-      io.to(toSid).emit('dm:call:accept', {
-        from: data.from || users[socket.id]?.username,
-        to:   data.to
-      });
+      io.to(toSid).emit('dm:call:accepted', { from: data.from || users[socket.id]?.username, to: data.to });
     }
   });
 
   socket.on('dm:call:reject', (data) => {
     const toSid = findSocket(data?.to);
+    console.log('[CALL] dm:call:reject to=' + data?.to + ' toSid=' + toSid);
     if (toSid) {
-      io.to(toSid).emit('dm:call:reject', {
-        from: data.from || users[socket.id]?.username,
-        to:   data.to
-      });
+      io.to(toSid).emit('dm:call:rejected', { from: data.from || users[socket.id]?.username, to: data.to });
     }
   });
 
   socket.on('dm:call:end', (data) => {
     const toSid = findSocket(data?.to);
+    console.log('[CALL] dm:call:end to=' + data?.to + ' toSid=' + toSid);
     if (toSid) {
-      io.to(toSid).emit('dm:call:end', {
-        from: data.from || users[socket.id]?.username,
-        to:   data.to
-      });
+      io.to(toSid).emit('dm:call:ended', { from: data.from || users[socket.id]?.username, to: data.to });
     }
   });
 
@@ -451,44 +613,213 @@ socket.on('user:login',     registerUser);
   });
 
   // ── Communidades sugeridas ────────────────────────────────────────────────
-  socket.on('community:get-by-id', (data) => {
-    const comm = communities[data?.id];
+  socket.on('community:get-by-id', async (data) => {
+    // Tenta buscar do Supabase primeiro
+    const supabaseCommunities = await supabaseBackend.getCommunities();
+    const comm = supabaseCommunities.find(c => c.id === data?.id) || communities[data?.id];
     socket.emit('community:by-id-response', { community: comm || null });
   });
 
-  socket.on('community:suggest', (data) => {
+  socket.on('community:suggest', async (data) => {
     if (data?.community) {
+      // Salva no Supabase
+      await supabaseBackend.createCommunity({
+        id: data.community.id,
+        name: data.community.name,
+        description: data.community.description,
+        iconUrl: data.community.iconUrl,
+        bannerUrl: data.community.bannerUrl,
+        createdBy: data.community.createdBy,
+        memberCount: data.community.memberCount
+      });
+      
       communities[data.community.id] = data.community;
       io.emit('suggested:new', data.community);
     }
   });
 
-  socket.on('community:unsuggest', (data) => {
-    if (data?.id) {
-      delete communities[data.id];
-      io.emit('suggested:removed', { id: data.id });
+  socket.on('community:unsuggest', async (data) => {
+    const communityId = data?.id || data?.communityId;
+    if (communityId) {
+      await supabaseBackend.deleteCommunity(communityId);
+      delete communities[communityId];
+      io.emit('suggested:removed', { id: communityId, communityId });
     }
   });
 
-  socket.on('community:add-suggested', (data) => {
-    socket.emit('suggested:communities', Object.values(communities));
+  // Adicionar comunidade nas sugeridas e propagar para todos
+  socket.on('community:add-suggested', async (data) => {
+    if (data && data.id && data.name) {
+      // Salva no Supabase
+      await supabaseBackend.createCommunity({
+        id: data.id,
+        name: data.name,
+        description: data.description || '',
+        iconUrl: data.icon || '',
+        bannerUrl: data.banner || '',
+        createdBy: users[socket.id]?.username || '',
+        memberCount: data.members || 0
+      }).catch(() => {});
+      communities[data.id] = data;
+      io.emit('suggested:new', data);
+    }
+    // Retorna a lista completa atualizada
+    const supabaseCommunities = await supabaseBackend.getCommunities();
+    const allCommunities = { ...communities };
+    supabaseCommunities.forEach(c => {
+      allCommunities[c.id] = { id: c.id, name: c.name, icon: c.icon_url || '', banner: c.banner_url || '', members: c.member_count || 0, description: c.description || '' };
+    });
+    socket.emit('suggested:communities', Object.values(allCommunities));
+  });
+
+  // Buscar lista de comunidades sugeridas (sem adicionar)
+  socket.on('community:get-suggested', async () => {
+    const supabaseCommunities = await supabaseBackend.getCommunities();
+    const allCommunities = { ...communities };
+    supabaseCommunities.forEach(c => {
+      allCommunities[c.id] = { id: c.id, name: c.name, icon: c.icon_url || '', banner: c.banner_url || '', members: c.member_count || 0, description: c.description || '' };
+    });
+    socket.emit('suggested:communities', Object.values(allCommunities));
+  });
+
+  // ── Servidores ───────────────────────────────────────────────────────────────
+  socket.on('server:create', async (data) => {
+    if (data?.server) {
+      // Salva no Supabase
+      await supabaseBackend.createServer({
+        id: data.server.id,
+        name: data.server.name,
+        description: data.server.description,
+        iconUrl: data.server.iconUrl,
+        owner: data.server.owner,
+        memberCount: data.server.memberCount
+      });
+      
+      socket.emit('server:created', data.server);
+    }
+  });
+
+  socket.on('server:list', async (data) => {
+    const dbServers = await supabaseBackend.getServers();
+    // Normaliza campos para o formato esperado pelo front-end
+    const normalized = dbServers.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description || '',
+      icon: s.icon_url || '',
+      owner: s.owner || '',
+      members: s.member_count || 0,
+      created_at: s.created_at
+    }));
+    socket.emit('server:list', normalized);
+  });
+
+  socket.on('server:update', async (data) => {
+    if (data?.id && data?.updates) {
+      await supabaseBackend.updateServer(data.id, data.updates);
+      socket.emit('server:updated', { id: data.id, updates: data.updates });
+    }
+  });
+
+  socket.on('server:delete', async (data) => {
+    if (data?.id) {
+      await supabaseBackend.deleteServer(data.id);
+      socket.emit('server:deleted', { id: data.id });
+    }
+  });
+
+  // ── Canais de Servidor ───────────────────────────────────────────────────────
+  socket.on('server:channel:create', async (data) => {
+    if (data?.channel) {
+      await supabaseBackend.createServerChannel({
+        id: data.channel.id,
+        serverId: data.channel.serverId,
+        name: data.channel.name,
+        type: data.channel.type || 'text',
+        description: data.channel.description
+      });
+      socket.emit('server:channel:created', data.channel);
+    }
+  });
+
+  socket.on('server:channel:list', async (data) => {
+    if (data?.serverId) {
+      const channels = await supabaseBackend.getServerChannels(data.serverId);
+      socket.emit('server:channel:list', channels);
+    }
+  });
+
+  socket.on('server:channel:delete', async (data) => {
+    if (data?.id) {
+      await supabaseBackend.deleteServerChannel(data.id);
+      socket.emit('server:channel:deleted', { id: data.id });
+    }
   });
 
   // ── Shorts ────────────────────────────────────────────────────────────────
-  socket.on('shorts:request', () => {
-    socket.emit('shorts:list', shorts.slice(-50));
+  socket.on('shorts:request', async () => {
+    // Carrega shorts do Supabase e mescla com memória
+    const supabaseShorts = await supabaseBackend.getShorts();
+    const allShorts = [...shorts];
+    supabaseShorts.forEach(s => {
+      if (!allShorts.find(existing => existing.id === s.id)) {
+        allShorts.push({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          fileUrl: s.file_url,
+          fileType: s.file_type,
+          username: s.username,
+          tags: s.tags,
+          timestamp: new Date(s.created_at).getTime()
+        });
+      }
+    });
+    // Ordena por timestamp e pega os últimos 50
+    allShorts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const recentShorts = allShorts.slice(0, 50);
+    // Emite ambos os eventos: 'shorts:history' (index.html) e 'shorts:list' (compat)
+    socket.emit('shorts:history', recentShorts);
+    socket.emit('shorts:list', recentShorts);
   });
 
-  socket.on('short:create', (data) => {
-    const s = { ...data, id: Date.now() + '_' + Math.random().toString(36).slice(2), timestamp: Date.now() };
+  socket.on('short:create', async (data) => {
+    const uname = data.username || users[socket.id]?.username || 'Anônimo';
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const s = { 
+      ...data, 
+      id: Date.now() + '_' + Math.random().toString(36).slice(2), 
+      timestamp: Date.now(), 
+      username: uname, 
+      time 
+    };
+    
+    // Salva na memória
     shorts.push(s);
+    
+    // Salva no Supabase
+    await supabaseBackend.createShort({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      fileUrl: s.fileUrl,
+      fileType: s.fileType || 'image',
+      username: s.username,
+      tags: s.tags || []
+    });
+    
+    // Emite 'short:new' (esperado pelo index.html) e 'short:update' (compat)
+    io.emit('short:new', s);
     io.emit('short:update', s);
   });
 
   socket.on('short:delete', (data) => {
-    const idx = shorts.findIndex(s => s.id === data.id);
+    const shortId = data.shortId || data.id;
+    const idx = shorts.findIndex(s => s.id === shortId);
     if (idx !== -1) shorts.splice(idx, 1);
-    io.emit('short:delete', { id: data.id });
+    // Emite 'short:removed' (esperado pelo index.html) e 'short:delete' (compat)
+    io.emit('short:removed', { shortId });
+    io.emit('short:delete', { id: shortId });
   });
 
   // ── Notificações ──────────────────────────────────────────────────────────
@@ -505,7 +836,9 @@ socket.on('user:login',     registerUser);
   socket.on('dm:voice-room:join', ({ roomKey, username, toUser, avatar } = {}) => {
     if (!roomKey) return;
     const room = 'dm-voice-room:' + roomKey;
-    const uname = username || socket.username || 'Anônimo';
+    const uname = username || users[socket.id]?.username || 'Anonimo';
+    // Salva username no socket para uso posterior
+    socket.username = uname;
     if (!dmVoiceRooms[roomKey]) dmVoiceRooms[roomKey] = [];
     dmVoiceRooms[roomKey] = dmVoiceRooms[roomKey].filter(u => u.socketId !== socket.id);
     const peers = dmVoiceRooms[roomKey].map(u => u.socketId);
@@ -514,9 +847,22 @@ socket.on('user:login',     registerUser);
     socket.join(room);
     socket.emit('dm:voice-room:peers', { peers, roomKey });
     socket.to(room).emit('dm:voice-room:user-joined', { socketId: socket.id, username: uname, roomKey });
-    if (toUser) _voiceEmit(null, toUser, 'dm:voice-room:notification', { from: uname, roomKey, action: 'joined' });
+    console.log('[VOICE-ROOM] ' + uname + ' entrou em ' + roomKey + ' | toUser=' + toUser);
+    console.log('[VOICE-ROOM] peers na sala:', peers);
+    if (toUser) {
+      const targetSocket = Object.entries(users).find(([, u]) =>
+        u.username?.toLowerCase() === toUser.toLowerCase()
+      );
+      console.log('[VOICE-ROOM] notificando toUser=' + toUser + ' sid=' + (targetSocket ? targetSocket[0] : 'NAO ENCONTRADO'));
+      console.log('[VOICE-ROOM] usuarios online:', Object.values(users).map(u => u.username));
+      if (targetSocket) {
+        io.to(targetSocket[0]).emit('dm:voice-room:notification', { from: uname, roomKey, action: 'joined' });
+        console.log('[VOICE-ROOM] notificacao enviada para', targetSocket[0]);
+      } else {
+        console.log('[VOICE-ROOM] ERRO: toUser "' + toUser + '" nao encontrado - heartbeat enviado?');
+      }
+    }
     io.to(room).emit('dm:voice-room:users', { users: dmVoiceRooms[roomKey], roomKey });
-    console.log('[DM-VOICE-ROOM] ' + uname + ' entrou em ' + roomKey);
   });
   socket.on('dm:voice-room:leave', ({ roomKey: rk } = {}) => {
     const key = rk || socket.dmVoiceRoomKey, room = 'dm-voice-room:' + key;
@@ -549,43 +895,27 @@ socket.on('user:login',     registerUser);
 
 // ─── Rota raiz ────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(APP_DIR, 'public', 'index.html'));
 });
 
-// ─── Iniciar servidor (com auto-kill da instância anterior) ─────────────────
-const { execSync } = require('child_process');
-
-function killPortAndListen() {
-  try {
-    // Windows
-    execSync(`for /f "tokens=5" %a in ('netstat -aon ^| find ":${PORT}" ^| find "LISTENING"') do taskkill /F /PID %a`, { stdio: 'ignore' });
-  } catch (_) {}
-  try {
-    // Linux / macOS
-    execSync(`lsof -ti tcp:${PORT} | xargs kill -9`, { stdio: 'ignore' });
-  } catch (_) {}
-
-  setTimeout(() => {
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ Servidor ZX rodando em http://localhost:${PORT}`);
-      console.log(`   Acesse: http://localhost:${PORT}`);
-    });
-  }, 500);
+// ─── Iniciar servidor ────────────────────────────────────────────────────────
+function startListen(port) {
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`✅ Servidor ZX rodando em http://localhost:${port}`);
+    if (process.send) process.send({ type: 'ready', port });
+  });
 }
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.log(`⚠️  Porta ${PORT} ocupada. Encerrando processo anterior...`);
-    killPortAndListen();
+    console.log(`⚠️  Porta ${PORT} ocupada, tentando porta ${PORT + 1}...`);
+    startListen(PORT + 1);
   } else {
     throw err;
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Servidor ZX rodando em http://localhost:${PORT}`);
-  console.log(`   Acesse: http://localhost:${PORT}`);
-});
+startListen(PORT);
 
 process.on('SIGINT',  () => { server.close(); process.exit(0); });
 process.on('SIGTERM', () => { server.close(); process.exit(0); });
