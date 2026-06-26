@@ -235,6 +235,13 @@ io.on('connection', (socket) => {
   });
 
     // ── Amizades
+  socket.on('friends:load', async (data) => {
+    const username = (data?.username || users[socket.id]?.username || '').toLowerCase();
+    if (!username) return;
+    const friends = await sb.getFriends(username);
+    socket.emit('friends:loaded', { friends });
+  });
+
   socket.on('friend:request', (data) => {
     const from = data?.from || users[socket.id]?.username;
     const to   = data?.to;
@@ -244,12 +251,19 @@ io.on('connection', (socket) => {
     if (toSid) io.to(toSid).emit('friend:request', { from, avatar: data?.avatar || null });
   });
 
-  socket.on('friend:accept', (data) => {
+  socket.on('friend:accept', async (data) => {
     const from = data?.from || users[socket.id]?.username;
     const to   = data?.to;
     if (!from || !to) return;
+    await sb.addFriendship(from, to);
     const toSid = findSocket(to);
-    if (toSid) io.to(toSid).emit('friend:accepted', { by: from, avatar: data?.avatar || null });
+    if (toSid) {
+      io.to(toSid).emit('friend:accepted', { by: from, avatar: data?.avatar || null });
+      const toFriends = await sb.getFriends(to.toLowerCase());
+      io.to(toSid).emit('friends:loaded', { friends: toFriends });
+    }
+    const fromFriends = await sb.getFriends(from.toLowerCase());
+    socket.emit('friends:loaded', { friends: fromFriends });
   });
 
   socket.on('friend:reject', (data) => {
@@ -260,10 +274,11 @@ io.on('connection', (socket) => {
     if (toSid) io.to(toSid).emit('friend:rejected', { by: from });
   });
 
-  socket.on('friend:remove', (data) => {
+  socket.on('friend:remove', async (data) => {
     const from = data?.from || users[socket.id]?.username;
     const to   = data?.to;
     if (!from || !to) return;
+    await sb.removeFriendship(from, to);
     const toSid = findSocket(to);
     if (toSid) io.to(toSid).emit('friend:removed', { by: from });
   });
