@@ -51,8 +51,28 @@ function broadcastOnlineUsers() {
 }
 
 // ─── Conexão Socket.IO ───────────────────────────────────────────────────────
+// ─── Conexão Socket.IO
 io.on('connection', (socket) => {
   console.log('[SERVER] Nova conexão:', socket.id);
+
+  // ── Heartbeat / identificação do usuário
+  function registerUser(data) {
+    const username = data?.username || data?.user || null;
+    if (!username) return;
+    users[socket.id] = {
+      ...(users[socket.id] || {}),
+      username,
+      avatar: data?.avatar || users[socket.id]?.avatar || null,
+      status: data?.status || 'online',
+      socketId: socket.id
+    };
+    socket.username = username;
+    if (data?.userId) userIdMap[username.toLowerCase()] = data.userId;
+    broadcastOnlineUsers();
+  }
+  socket.on('user:heartbeat', registerUser);
+  socket.on('user:login',     registerUser);
+
 
   // ── Heartbeat / identificação do usuário ─────────────────────────────────
 function registerUser(data) {
@@ -216,6 +236,49 @@ socket.on('user:login',     registerUser);
     }
   });
 
+    // ── Amizades
+  socket.on('friend:request', (data) => {
+    const from = data?.from || users[socket.id]?.username;
+    const to   = data?.to;
+    if (!from || !to) return;
+    const toSid = findSocket(to);
+    socket.emit('friend:request:sent', { to, offline: !toSid });
+    if (toSid) io.to(toSid).emit('friend:request', { from, avatar: data?.avatar || null });
+  });
+
+  socket.on('friend:accept', (data) => {
+    const from = data?.from || users[socket.id]?.username;
+    const to   = data?.to;
+    if (!from || !to) return;
+    const toSid = findSocket(to);
+    if (toSid) io.to(toSid).emit('friend:accepted', { by: from, avatar: data?.avatar || null });
+  });
+
+  socket.on('friend:reject', (data) => {
+    const from = data?.from || users[socket.id]?.username;
+    const to   = data?.to;
+    if (!from || !to) return;
+    const toSid = findSocket(to);
+    if (toSid) io.to(toSid).emit('friend:rejected', { by: from });
+  });
+
+  socket.on('friend:remove', (data) => {
+    const from = data?.from || users[socket.id]?.username;
+    const to   = data?.to;
+    if (!from || !to) return;
+    const toSid = findSocket(to);
+    if (toSid) io.to(toSid).emit('friend:removed', { by: from });
+  });
+
+  socket.on('friend:cancel', (data) => {
+    const from = data?.from || users[socket.id]?.username;
+    const to   = data?.to;
+    if (!from || !to) return;
+    socket.emit('friend:cancel:ok', { to });
+    const toSid = findSocket(to);
+    if (toSid) io.to(toSid).emit('friend:request:cancelled', { by: from });
+  });
+  
   // ── Chamadas de voz DM (WebRTC signaling) ────────────────────────────────
   function findSocket(username) {
     if (!username) return null;
