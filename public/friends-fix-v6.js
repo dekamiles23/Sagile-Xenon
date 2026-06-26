@@ -544,6 +544,26 @@
 
     waitForSocket();
 
+    // Recarrega amigos sempre que a view muda (evita sumiço ao trocar de aba)
+    var _origShowLayout = window.showLayout;
+    function hookShowLayout() {
+      if (window.showLayout && window.showLayout !== _hookedShowLayout) {
+        _origShowLayout = window.showLayout;
+        window.showLayout = _hookedShowLayout;
+      }
+    }
+    function _hookedShowLayout(layoutId) {
+      _origShowLayout && _origShowLayout(layoutId);
+      var uname = myName();
+      if (uname && uname !== 'Eu' && window.socket && window.socket.connected) {
+        window.socket.emit('friends:load', { username: uname });
+      }
+    }
+    // Tenta fazer o hook imediatamente e novamente após 1s (caso showLayout ainda não exista)
+    hookShowLayout();
+    setTimeout(hookShowLayout, 1000);
+    setTimeout(hookShowLayout, 3000);
+
     // Expor globalmente para compatibilidade
     window.renderFriendsModal = renderFriendsModal;
     window.friends = friends;
