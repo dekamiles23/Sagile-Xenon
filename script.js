@@ -953,7 +953,14 @@ function renderDmMessages() {
 const _dmPending = {};
 
 function sendDmMessage() {
-  const input = document.getElementById('dm-message-input');
+  // Busca o input DM visível — pode estar no dm-chat-area (inline) ou no modal do private-chat-system
+  const allInputs = document.querySelectorAll('#dm-message-input');
+  let input = null;
+  allInputs.forEach(function(el) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) input = el;
+  });
+  if (!input) input = document.getElementById('dm-message-input');
   const text = input?.value.trim();
   
   if (!text || !currentDmUser) return;
@@ -991,6 +998,11 @@ function sendDmMessage() {
   if (input.tagName === 'TEXTAREA') {
     input.style.height = '40px';
   }
+  // Limpar também o outro input DM caso exista
+  document.querySelectorAll('#dm-message-input').forEach(function(el) {
+    el.value = '';
+    if (el.tagName === 'TEXTAREA') el.style.height = '40px';
+  });
   const counter = document.getElementById('dm-char-counter');
   if (counter) counter.textContent = '0/4000';
   renderDmMessages();
