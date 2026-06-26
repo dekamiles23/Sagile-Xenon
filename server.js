@@ -1,572 +1,822 @@
+/**
+ * Sagile ZX — Servidor Principal
+ * Express + Socket.IO na porta 3002
+ * Serve arquivos estáticos de /public e /uploads
+ */
+
 const express = require('express');
-const http = require('http');
+const http    = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
-const fs = require('fs');
+const path    = require('path');
+const fs      = require('fs');
+const supabaseBackend = require('./supabase-backend');
 
-const app = express();
+const app  = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io   = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  },
+  maxHttpBufferSize: 10e6
+});
 
-app.use(express.static(path.join(__dirname, 'public')));
+const PORT = process.env.PORT || 3002;
+const APP_DIR = process.env.APP_DIR || __dirname;
+const USER_DATA_DIR = process.env.USER_DATA_DIR || __dirname;
 
-// Arquivos de persistência
-const DATA_FILE = path.join(__dirname, 'data.json');
+// ─── Servir arquivos estáticos ───────────────────────────────────────────────
+app.use(express.static(path.join(APP_DIR, 'public')));
+app.use('/uploads', express.static(path.join(USER_DATA_DIR, 'uploads')));
+app.use(express.json({ limit: '10mb' }));
 
-// Carregar dados salvos ou inicializar
-let savedData = { channels: {}, feedPosts: [], friendRequests: {}, friends: {}, diaryEntries: {}, shorts: [] };
-try {
-  if (fs.existsSync(DATA_FILE)) {
-    savedData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    console.log('✅ Dados carregados com sucesso do arquivo');
-  }
-} catch (e) {
-  console.log('ℹ️ Criando novo arquivo de dados');
+// ─── Estado em memória ───────────────────────────────────────────────────────
+const users          = {};   // socketId -> { username, avatar, status, channel, serverId }
+const dmHistory      = {};   // "a|b" (sorted) -> [msg, ...]
+const channelHistory = {};   // "serverId:channel" -> [msg, ...]
+const voiceRooms     = {};   // "serverId:channel" -> [{ username, avatar }]
+const dmVoiceRooms   = {};   // "dm-voice-room:roomKey" -> [{ socketId, username, avatar }]
+const feedPosts      = [];   // global feed
+const userIdMap      = {};   // username.lower -> userId
+const communities    = {};   // id -> community obj
+const shorts         = [];   // array of short objects
+
+// ─── Salas privadas ───────────────────────────────────────────────────────────
+const privateRooms   = {};   // roomId -> { id, name, createdBy, members: [], messages: [] }
+const userRooms      = {};   // username.lower -> [roomId, ...]
+
+function dmKey(a, b) {
+  return [a, b].sort().join('|');
 }
 
-const channels = savedData.channels || {};
-const feedPosts = savedData.feedPosts || [];
-const friendRequests = savedData.friendRequests || {}; // { usuario: [solicitantes] }
-const friends = savedData.friends || {}; // { usuario: [amigos] }
-const diaryEntries = savedData.diaryEntries || {}; // { usuario: [entradas] }
-const shorts = savedData.shorts || []; // Lista global de Shorts / Reels
-const FEED_MAX = 200;
-const SHORTS_MAX = 100;
-const voiceRooms = {};
-const onlineUsers = {}; // username -> socketId
-
-// Função para salvar dados em arquivo
-function saveData() {
-  const data = {
-    channels,
-    feedPosts,
-    friendRequests,
-    friends,
-    diaryEntries,
-    shorts,
-    dmMessages: savedData.dmMessages,
-    notifications: savedData.notifications,
-    savedAt: new Date().toISOString()
-  };
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+function broadcastOnlineUsers() {
+  const online = Object.values(users).map(u => ({
+    username: u.username,
+    avatar:   u.avatar || null,
+    status:   u.status || 'online'
+  }));
+  io.emit('friends:data', online);
 }
 
-// Salvar automaticamente a cada 30 segundos
-setInterval(saveData, 30000);
-
-function broadcastPresence() {
-  const list = Object.keys(onlineUsers);
-  io.emit('friends:presence', { online: list });
-}
-
-function roomKey(communityId, channel) {
-  return communityId ? `${communityId}:${channel}` : channel;
-}
-
-function getHistory(communityId, channel) {
-  const key = roomKey(communityId, channel);
-  if (!channels[key]) channels[key] = [];
-  return channels[key];
-}
-
-function pushMessage(communityId, channel, msg) {
-  const history = getHistory(communityId, channel);
-  history.push(msg);
-  if (history.length > 100) history.shift();
-}
-
+// ─── Conexão Socket.IO ───────────────────────────────────────────────────────
 io.on('connection', (socket) => {
-  console.log(`Usuário conectado: ${socket.id}`);
+  console.log('[SERVER] Nova conexão:', socket.id);
 
-  socket.on('user:login', ({ username }) => {
-    socket.username = username;
-    onlineUsers[username] = socket.id;
-    broadcastPresence();
-    
-    // Enviar dados salvos para o usuário
-    socket.emit('friends:data', {
-      requests: friendRequests[username] || [],
-      friends: friends[username] || []
-    });
-
-    // Enviar entradas do diário do usuário
-    socket.emit('diary:entries', {
-      entries: diaryEntries[username] || []
-    });
-
-    // Enviar todos os Shorts salvos
-    socket.emit('shorts:history', shorts.slice(-50).reverse());
-  });
-
-  socket.on('friend:request', ({ to }) => {
-    // Salvar solicitação no servidor
-    if (!friendRequests[to]) friendRequests[to] = [];
-    if (!friendRequests[to].includes(socket.username)) {
-      friendRequests[to].push(socket.username);
-      saveData();
-    }
-    
-    const targetId = onlineUsers[to];
-    if (targetId) {
-      io.to(targetId).emit('friend:request', { from: socket.username });
-    }
-  });
-
-  socket.on('friend:accept', ({ to }) => {
-    // Remover solicitação pendente
-    if (friendRequests[socket.username]) {
-      friendRequests[socket.username] = friendRequests[socket.username].filter(u => u !== to);
-    }
-    
-    // Adicionar amizade para ambos
-    if (!friends[socket.username]) friends[socket.username] = [];
-    if (!friends[socket.username].includes(to)) friends[socket.username].push(to);
-    
-    if (!friends[to]) friends[to] = [];
-    if (!friends[to].includes(socket.username)) friends[to].push(socket.username);
-    
-    saveData();
-    
-    const targetId = onlineUsers[to];
-    if (targetId) {
-      io.to(targetId).emit('friend:accepted', { by: socket.username });
-    }
-  });
-
-  socket.on('friend:reject', ({ to }) => {
-    // Remover solicitação pendente
-    if (friendRequests[socket.username]) {
-      friendRequests[socket.username] = friendRequests[socket.username].filter(u => u !== to);
-      saveData();
-    }
-    
-    const targetId = onlineUsers[to];
-    if (targetId) {
-      io.to(targetId).emit('friend:rejected', { by: socket.username });
-    }
-  });
-
-  socket.on('friend:remove', ({ to }) => {
-    // Remover amizade para ambos
-    if (friends[socket.username]) {
-      friends[socket.username] = friends[socket.username].filter(u => u !== to);
-    }
-    if (friends[to]) {
-      friends[to] = friends[to].filter(u => u !== socket.username);
-    }
-    saveData();
-    
-    const targetId = onlineUsers[to];
-    if (targetId) {
-      io.to(targetId).emit('friend:removed', { by: socket.username });
-    }
-  });
-
-  // ==============================
-  // SISTEMA DE MENSAGENS PRIVADAS
-  // ==============================
-  socket.on('dm:message', (msg) => {
-    const targetId = onlineUsers[msg.to];
-    if (targetId) {
-      io.to(targetId).emit('dm:message', msg);
-    }
-    
-    // Salvar mensagem no histórico
-    if (!savedData.dmMessages) savedData.dmMessages = {};
-    const conversationId = [socket.username, msg.to].sort().join('_');
-    if (!savedData.dmMessages[conversationId]) savedData.dmMessages[conversationId] = [];
-    
-    savedData.dmMessages[conversationId].push({
-      from: socket.username,
-      to: msg.to,
-      text: msg.text,
-      time: msg.time,
-      timestamp: Date.now(),
-      status: targetId ? 'delivered' : 'sent'
-    });
-    
-    saveData();
-  });
-
-  socket.on('dm:typing', ({ to }) => {
-    const targetId = onlineUsers[to];
-    if (targetId) {
-      io.to(targetId).emit('dm:typing', { from: socket.username });
-    }
-  });
-
-  socket.on('dm:read', ({ from }) => {
-    const conversationId = [socket.username, from].sort().join('_');
-    if (savedData.dmMessages && savedData.dmMessages[conversationId]) {
-      savedData.dmMessages[conversationId].forEach(msg => {
-        if (msg.to === socket.username) {
-          msg.status = 'read';
-        }
-      });
-      saveData();
-    }
-    
-    const targetId = onlineUsers[from];
-    if (targetId) {
-      io.to(targetId).emit('dm:read', { by: socket.username });
-    }
-  });
-
-  // ==============================
-  // SISTEMA DE NOTIFICAÇÕES
-  // ==============================
-  socket.on('notification:send', ({ to, type, data }) => {
-    if (!savedData.notifications) savedData.notifications = {};
-    if (!savedData.notifications[to]) savedData.notifications[to] = [];
-    
-    const notification = {
-      id: `notif_${Date.now().toString(36)}`,
-      type,
-      data,
-      from: socket.username,
-      read: false,
-      createdAt: Date.now(),
-      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  // ── Heartbeat / identificação do usuário ─────────────────────────────────
+  function registerUser(data) {
+    const username = data?.username || data?.user || null;
+    if (!username) return;
+    users[socket.id] = {
+      ...(users[socket.id] || {}),
+      username,
+      avatar: data?.avatar || users[socket.id]?.avatar || null,
+      status: data?.status || 'online',
+      socketId: socket.id
     };
-    
-    savedData.notifications[to].unshift(notification);
-    saveData();
-    
-    const targetId = onlineUsers[to];
-    if (targetId) {
-      io.to(targetId).emit('notification:new', notification);
-    }
-  });
-
-  socket.on('notification:mark-read', ({ notificationId }) => {
-    if (savedData.notifications && savedData.notifications[socket.username]) {
-      const notif = savedData.notifications[socket.username].find(n => n.id === notificationId);
-      if (notif) notif.read = true;
-      saveData();
-    }
-  });
-
-  socket.on('notification:mark-all-read', () => {
-    if (savedData.notifications && savedData.notifications[socket.username]) {
-      savedData.notifications[socket.username].forEach(n => n.read = true);
-      saveData();
-    }
-  });
-
-  socket.on('join', ({ username, channel, communityId }) => {
     socket.username = username;
-    socket.communityId = communityId || null;
-    socket.currentChannel = channel;
-    const room = roomKey(communityId, channel);
+    if (data?.userId) userIdMap[username.toLowerCase()] = data.userId;
+    console.log('[SERVER] Usuário registrado:', username, '| socket:', socket.id);
+    broadcastOnlineUsers();
+  }
 
-    socket.join(room);
-    socket.emit('history', getHistory(communityId, channel));
-    
-    // ✅ Enviar abas de fandom APENAS quando o servidor tiver elas configuradas
-    // Por enquanto não enviamos nada, o cliente só renderiza a aba padrão
-    // Quando as abas forem implementadas no backend, basta emitir aqui:
-    // socket.emit('fandom:tabs', fandomTabs);
-    
-    io.to(room).emit('system', `${username} entrou no canal #${channel}`);
+  socket.on('user:heartbeat', registerUser);
+  socket.on('user:login',     registerUser);
+
+  socket.on('user:status', (data) => {
+    if (!data?.username) return;
+    if (users[socket.id]) users[socket.id].status = data.status || 'online';
+    io.emit('friend:status', { username: data.username, status: data.status || 'online' });
   });
 
-  socket.on('switch-channel', ({ channel, communityId }) => {
-    const prevRoom = roomKey(socket.communityId, socket.currentChannel);
+  // ── Avatar ───────────────────────────────────────────────────────────────
+  socket.on('user:avatar:set', (data) => {
+    if (!data?.username) return;
+    if (users[socket.id]) users[socket.id].avatar = data.avatar;
+    socket.emit('user:avatar:data', { username: data.username, avatar: data.avatar });
+    socket.broadcast.emit('user:avatar:data', { username: data.username, avatar: data.avatar });
+  });
 
-    if (socket.currentChannel) {
-      socket.leave(prevRoom);
-      io.to(prevRoom).emit('system', `${socket.username} saiu do canal`);
+  socket.on('user:avatar:get', (data) => {
+    const target = Object.values(users).find(u =>
+      u.username?.toLowerCase() === data?.username?.toLowerCase()
+    );
+    socket.emit('user:avatar:data', {
+      username: data?.username,
+      avatar: target?.avatar || null
+    });
+  });
+
+  // ── Resolver userId por username ──────────────────────────────────────────
+  socket.on('dm:get-user-id', (data) => {
+    const username = data?.username;
+    if (!username) return;
+    const uid = userIdMap[username.toLowerCase()] || null;
+    socket.emit('dm:user-id', { username, userId: uid });
+  });
+
+  // ── Presença ─────────────────────────────────────────────────────────────
+  socket.on('presence:request', () => {
+    const online = Object.values(users).map(u => ({
+      username: u.username,
+      avatar:   u.avatar || null,
+      status:   u.status || 'online'
+    }));
+    socket.emit('friends:data', online);
+  });
+
+  // ── Canal de servidor (chat) ──────────────────────────────────────────────
+  socket.on('switch-channel', (data) => {
+    // Sai do canal anterior
+    if (users[socket.id]?.room) socket.leave(users[socket.id].room);
+    const room = `${data.serverId}:${data.channel}`;
+    socket.join(room);
+    if (users[socket.id]) {
+      users[socket.id].room    = room;
+      users[socket.id].channel = data.channel;
+      users[socket.id].serverId = data.serverId;
     }
-
-    socket.communityId = communityId || socket.communityId;
-    socket.currentChannel = channel;
-    const room = roomKey(socket.communityId, channel);
-
-    socket.join(room);
-    socket.emit('history', getHistory(socket.communityId, channel));
-    io.to(room).emit('system', `${socket.username} entrou no canal #${channel}`);
+    // Envia histórico
+    const hist = channelHistory[room] || [];
+    socket.emit('history', hist.slice(-100));
   });
 
-  socket.on('message', ({ channel, text, communityId, visualProfile }) => {
-    const cid = communityId || socket.communityId;
-    const room = roomKey(cid, channel);
+  socket.on('message', (data) => {
+    const room = users[socket.id]?.room;
+    if (!room) return;
     const msg = {
-      username: socket.username,
-      text,
-      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      visualProfile: visualProfile
-    };
-
-    pushMessage(cid, channel, msg);
-    
-    // ✅ CORREÇÃO: Envia a mensagem DE VOLTA para o usuário que enviou
-    socket.emit('message', msg);
-    
-    // Envia para todos os outros usuários na sala
-    socket.to(room).emit('message', msg);
-  });
-
-  socket.on('feed:join', () => {
-    console.log('📥 [SERVIDOR] Recebido feed:join de', socket.username || socket.id);
-    socket.join('global-feed');
-    console.log('📤 [SERVIDOR] Enviando', feedPosts.length, 'postagens para o cliente');
-    socket.emit('feed:history', feedPosts.slice(-50).reverse());
-  });
-
-  socket.on('feed:post', ({ title, body, subreddit, username }) => {
-    const author = username || socket.username || 'Anônimo';
-    const post = {
-      id: `post_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-      title: String(title || '').trim().slice(0, 200),
-      body: String(body || '').trim().slice(0, 2000),
-      subreddit: String(subreddit || 'geral').slice(0, 32),
-      username: author,
-      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      createdAt: Date.now(),
-      score: 1,
-      votes: {},
-      comments: [],
-    };
-    if (!post.title) return;
-    feedPosts.push(post);
-    if (feedPosts.length > FEED_MAX) feedPosts.shift();
-    io.to('global-feed').emit('feed:new', post);
-  });
-
-  socket.on('feed:vote', ({ postId, vote }) => {
-    const post = feedPosts.find(p => p.id === postId);
-    if (!post) return;
-    const uid = socket.id;
-    const prev = post.votes[uid] || 0;
-    const next = vote === prev ? 0 : vote;
-    post.score += next - prev;
-    if (next === 0) delete post.votes[uid];
-    else post.votes[uid] = next;
-    io.to('global-feed').emit('feed:updated', { id: postId, score: post.score });
-  });
-
-  socket.on('feed:comment', ({ postId, text, username, parentId }) => {
-    const post = feedPosts.find(p => p.id === postId);
-    if (!post || !String(text || '').trim()) return;
-    const comment = {
-      id: `comment_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-      username: username || socket.username || 'Anônimo',
-      text: String(text).trim().slice(0, 500),
-      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      id:        Date.now() + '_' + Math.random().toString(36).slice(2),
+      username:  data.username || 'Anônimo',
+      avatar:    data.avatar   || null,
+      text:      data.text     || data.content || '',
       timestamp: Date.now(),
-      parentId: parentId || null,
-      score: 0,
-      votes: {},
-      replies: []
+      type:      data.type || 'text',
+      media:     data.media || null
     };
-    
-    if (parentId) {
-      // É uma resposta a outro comentário
-      function findAndAddComment(comments) {
-        for (let c of comments) {
-          if (c.id === parentId) {
-            c.replies.push(comment);
-            return true;
-          }
-          if (c.replies.length && findAndAddComment(c.replies)) return true;
-        }
-        return false;
-      }
-      findAndAddComment(post.comments);
-    } else {
-      // Comentário principal
-      post.comments.push(comment);
-    }
-    
-    io.to('global-feed').emit('feed:commented', { postId, comment });
-    io.to(`post:${postId}`).emit('post:commented', { postId, comment });
+    if (!channelHistory[room]) channelHistory[room] = [];
+    channelHistory[room].push(msg);
+    if (channelHistory[room].length > 500) channelHistory[room].shift();
+    io.to(room).emit('message', msg);
+    socket.emit('message:sent', { ...msg, status: 'delivered' });
   });
 
-  socket.on('post:join', ({ postId }) => {
-    socket.join(`post:${postId}`);
-    const post = feedPosts.find(p => p.id === postId);
+  // ── DM (mensagens diretas) ────────────────────────────────────────────────
+  socket.on('dm:history', (data) => {
+    const me   = users[socket.id]?.username;
+    const them = data?.with;
+    if (!me || !them) return;
+    const key  = dmKey(me, them);
+    socket.emit('dm:history', { with: them, messages: (dmHistory[key] || []).slice(-100) });
+  });
+
+  socket.on('dm:message', (data) => {
+    const from = data?.from || users[socket.id]?.username;
+    const to   = data?.to;
+    if (!from || !to) return;
+
+    const msg = {
+      id:        Date.now() + '_' + Math.random().toString(36).slice(2),
+      from,
+      to,
+      text:      data.text || data.content || '',
+      timestamp: Date.now(),
+      avatar:    data.avatar || users[socket.id]?.avatar || null,
+      type:      data.type || 'text',
+      media:     data.media || null
+    };
+
+    const key = dmKey(from, to);
+    if (!dmHistory[key]) dmHistory[key] = [];
+    dmHistory[key].push(msg);
+    if (dmHistory[key].length > 500) dmHistory[key].shift();
+
+    // Envia ao remetente
+    socket.emit('dm:message:sent', msg);
+
+    // Envia ao destinatário (se online)
+    const targetSocket = Object.entries(users).find(([, u]) =>
+      u.username?.toLowerCase() === to.toLowerCase()
+    );
+    if (targetSocket) {
+      io.to(targetSocket[0]).emit('dm:message', msg);
+    }
+  });
+
+  socket.on('dm:typing', (data) => {
+    const from = data?.from || users[socket.id]?.username;
+    const to   = data?.to;
+    if (!from || !to) return;
+    const targetSocket = Object.entries(users).find(([, u]) =>
+      u.username?.toLowerCase() === to.toLowerCase()
+    );
+    if (targetSocket) {
+      io.to(targetSocket[0]).emit('dm:typing', { from });
+    }
+  });
+
+  // ── Salas privadas ─────────────────────────────────────────────────────────
+  // Criar uma sala privada
+  socket.on('private-room:create', (data) => {
+    const username = users[socket.id]?.username;
+    if (!username) return;
+
+    const roomId = 'private_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const roomName = data?.name || 'Sala Privada';
+
+    privateRooms[roomId] = {
+      id: roomId,
+      name: roomName,
+      createdBy: username,
+      createdAt: Date.now(),
+      members: [username],
+      messages: []
+    };
+
+    const userKey = username.toLowerCase();
+    if (!userRooms[userKey]) userRooms[userKey] = [];
+    userRooms[userKey].push(roomId);
+
+    socket.join(roomId);
+    socket.emit('private-room:created', { roomId, name: roomName });
+  });
+
+  // Listar salas do usuário
+  socket.on('private-room:list', () => {
+    const username = users[socket.id]?.username;
+    if (!username) return;
+
+    const userKey = username.toLowerCase();
+    const roomIds = userRooms[userKey] || [];
+    const rooms = roomIds.map(id => privateRooms[id]).filter(Boolean);
+
+    socket.emit('private-room:list', rooms);
+  });
+
+  // Entrar em uma sala privada
+  socket.on('private-room:join', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    if (!username || !roomId || !privateRooms[roomId]) return;
+
+    const room = privateRooms[roomId];
+
+    if (!room.members.includes(username)) {
+      room.members.push(username);
+      const userKey = username.toLowerCase();
+      if (!userRooms[userKey]) userRooms[userKey] = [];
+      if (!userRooms[userKey].includes(roomId)) {
+        userRooms[userKey].push(roomId);
+      }
+    }
+
+    socket.join(roomId);
+    socket.emit('private-room:joined', { roomId, name: room.name });
+    io.to(roomId).emit('private-room:user-joined', { username, roomId });
+
+    socket.emit('private-room:history', { roomId, messages: room.messages.slice(-100) });
+  });
+
+  // Sair de uma sala privada
+  socket.on('private-room:leave', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    if (!username || !roomId) return;
+
+    socket.leave(roomId);
+    io.to(roomId).emit('private-room:user-left', { username, roomId });
+  });
+
+  // Enviar mensagem em sala privada
+  socket.on('private-room:message', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    if (!username || !roomId || !privateRooms[roomId]) return;
+
+    const room = privateRooms[roomId];
+    if (!room.members.includes(username)) return;
+
+    const msg = {
+      id: Date.now() + '_' + Math.random().toString(36).slice(2),
+      username,
+      avatar: users[socket.id]?.avatar || null,
+      text: data?.text || '',
+      timestamp: Date.now(),
+      type: data?.type || 'text',
+      media: data?.media || null
+    };
+
+    room.messages.push(msg);
+    if (room.messages.length > 500) room.messages.shift();
+
+    io.to(roomId).emit('private-room:message', { ...msg, roomId });
+  });
+
+  // Convidar usuário para sala privada
+  socket.on('private-room:invite', (data) => {
+    const username = users[socket.id]?.username;
+    const roomId = data?.roomId;
+    const targetUsername = data?.username;
+    if (!username || !roomId || !targetUsername) return;
+
+    const room = privateRooms[roomId];
+    if (!room || room.createdBy !== username) return;
+
+    const targetSocket = Object.entries(users).find(([, u]) =>
+      u.username?.toLowerCase() === targetUsername.toLowerCase()
+    );
+
+    if (targetSocket) {
+      io.to(targetSocket[0]).emit('private-room:invited', {
+        roomId,
+        roomName: room.name,
+        invitedBy: username
+      });
+    }
+  });
+
+  socket.on('dm:read', (data) => {
+    const me   = data?.from || users[socket.id]?.username;
+    const from = data?.from;
+    if (!from) return;
+    const targetSocket = Object.entries(users).find(([, u]) =>
+      u.username?.toLowerCase() === from.toLowerCase()
+    );
+    if (targetSocket) {
+      io.to(targetSocket[0]).emit('dm:read', { by: me });
+    }
+  });
+
+  // ── Chamadas de voz DM (WebRTC signaling) ────────────────────────────────
+  function findSocket(username) {
+    if (!username) return null;
+    const entry = Object.entries(users).find(([, u]) =>
+      u.username?.toLowerCase() === username.toLowerCase()
+    );
+    return entry ? entry[0] : null;
+  }
+
+  socket.on('dm:call:start', (data) => {
+    const from = data.from || users[socket.id]?.username;
+    const to   = data?.to;
+    const toSid = findSocket(to);
+    console.log('[CALL] dm:call:start from=' + from + ' to=' + to + ' toSid=' + toSid);
+    console.log('[CALL] usuarios online:', Object.values(users).map(u => u.username));
+    if (toSid) {
+      io.to(toSid).emit('dm:call:incoming', { from, fromId: data.fromId || null, to, toId: data.toId || null });
+      console.log('[CALL] dm:call:incoming enviado para', toSid);
+    } else {
+      console.log('[CALL] ERRO: usuario "' + to + '" nao encontrado nos users conectados');
+      socket.emit('dm:call:error', { message: 'Usuário "' + to + '" não está online ou não enviou heartbeat' });
+    }
+  });
+
+  socket.on('dm:call:accept', (data) => {
+    const toSid = findSocket(data?.to);
+    console.log('[CALL] dm:call:accept to=' + data?.to + ' toSid=' + toSid);
+    if (toSid) {
+      io.to(toSid).emit('dm:call:accepted', { from: data.from || users[socket.id]?.username, to: data.to });
+    }
+  });
+
+  socket.on('dm:call:reject', (data) => {
+    const toSid = findSocket(data?.to);
+    console.log('[CALL] dm:call:reject to=' + data?.to + ' toSid=' + toSid);
+    if (toSid) {
+      io.to(toSid).emit('dm:call:rejected', { from: data.from || users[socket.id]?.username, to: data.to });
+    }
+  });
+
+  socket.on('dm:call:end', (data) => {
+    const toSid = findSocket(data?.to);
+    console.log('[CALL] dm:call:end to=' + data?.to + ' toSid=' + toSid);
+    if (toSid) {
+      io.to(toSid).emit('dm:call:ended', { from: data.from || users[socket.id]?.username, to: data.to });
+    }
+  });
+
+  socket.on('dm:voice:offer', (data) => {
+    const toSid = findSocket(data?.to);
+    if (toSid) {
+      io.to(toSid).emit('dm:voice:offer', {
+        from:  data.from || users[socket.id]?.username,
+        offer: data.offer
+      });
+    }
+  });
+
+  socket.on('dm:voice:answer', (data) => {
+    const toSid = findSocket(data?.to);
+    if (toSid) {
+      io.to(toSid).emit('dm:voice:answer', {
+        from:   data.from || users[socket.id]?.username,
+        answer: data.answer
+      });
+    }
+  });
+
+  socket.on('dm:voice:ice', (data) => {
+    const toSid = findSocket(data?.to);
+    if (toSid) {
+      io.to(toSid).emit('dm:voice:ice', {
+        from:      data.from || users[socket.id]?.username,
+        candidate: data.candidate
+      });
+    }
+  });
+
+  // ── Salas de voz (servidor) ───────────────────────────────────────────────
+  socket.on('voice:join', (data) => {
+    const roomKey = `${data.serverId}:${data.channel}`;
+    if (!voiceRooms[roomKey]) voiceRooms[roomKey] = [];
+    const entry = {
+      username:  data.username || users[socket.id]?.username,
+      avatar:    data.avatar   || users[socket.id]?.avatar || null,
+      socketId:  socket.id
+    };
+    voiceRooms[roomKey] = voiceRooms[roomKey].filter(u => u.socketId !== socket.id);
+    voiceRooms[roomKey].push(entry);
+    if (users[socket.id]) users[socket.id].voiceRoom = roomKey;
+    io.emit('voice:room-users', { room: roomKey, users: voiceRooms[roomKey] });
+  });
+
+  socket.on('voice:leave', (data) => {
+    const roomKey = `${data.serverId}:${data.channel}`;
+    if (voiceRooms[roomKey]) {
+      voiceRooms[roomKey] = voiceRooms[roomKey].filter(u => u.socketId !== socket.id);
+      io.emit('voice:room-users', { room: roomKey, users: voiceRooms[roomKey] });
+    }
+    if (users[socket.id]) delete users[socket.id].voiceRoom;
+  });
+
+  // ── Compartilhamento de mídia (relay) ────────────────────────────────────
+  ['audio_share_started','audio_share_stopped','camera_started','camera_stopped',
+   'screen_share_started','screen_share_stopped','window_share_started','window_share_stopped',
+   'call:start'
+  ].forEach(evt => {
+    socket.on(evt, (data) => {
+      const room = users[socket.id]?.room;
+      if (room) socket.to(room).emit(evt, { ...data, from: users[socket.id]?.username });
+    });
+  });
+
+  // ── Feed ─────────────────────────────────────────────────────────────────
+  socket.on('feed:join', () => {
+    socket.join('feed');
+    socket.emit('feed:history', feedPosts.slice(-50));
+  });
+
+  socket.on('feed:post', (data) => {
+    const post = {
+      id:        Date.now() + '_' + Math.random().toString(36).slice(2),
+      username:  data.username || users[socket.id]?.username,
+      avatar:    data.avatar   || null,
+      text:      data.text     || '',
+      media:     data.media    || null,
+      timestamp: Date.now(),
+      votes:     0,
+      comments:  []
+    };
+    feedPosts.push(post);
+    if (feedPosts.length > 200) feedPosts.shift();
+    io.to('feed').emit('feed:new', post);
+  });
+
+  socket.on('feed:vote', (data) => {
+    const post = feedPosts.find(p => p.id === data.postId);
     if (post) {
-      socket.emit('post:data', post);
+      post.votes = (post.votes || 0) + (data.direction === 'up' ? 1 : -1);
+      io.to('feed').emit('feed:new', post);
     }
   });
 
-  socket.on('post:leave', ({ postId }) => {
-    socket.leave(`post:${postId}`);
+  socket.on('feed:comment', (data) => {
+    const post = feedPosts.find(p => p.id === data.postId);
+    if (post) {
+      const comment = {
+        username:  data.username || users[socket.id]?.username,
+        text:      data.text,
+        timestamp: Date.now()
+      };
+      if (!post.comments) post.comments = [];
+      post.comments.push(comment);
+      io.to('feed').emit('feed:new', post);
+    }
   });
 
-  socket.on('comment:vote', ({ postId, commentId, vote }) => {
-    const post = feedPosts.find(p => p.id === postId);
-    if (!post) return;
-    
-    function findComment(comments) {
-      for (let c of comments) {
-        if (c.id === commentId) return c;
-        if (c.replies.length) {
-          const found = findComment(c.replies);
-          if (found) return found;
-        }
+  // ── Posts individuais ─────────────────────────────────────────────────────
+  socket.on('post:join', (data) => {
+    socket.join('post:' + data.postId);
+    const post = feedPosts.find(p => p.id === data.postId);
+    if (post) socket.emit('post:data', post);
+  });
+
+  socket.on('post:leave', (data) => {
+    socket.leave('post:' + data.postId);
+  });
+
+  // ── Communidades sugeridas ────────────────────────────────────────────────
+  socket.on('community:get-by-id', async (data) => {
+    // Tenta buscar do Supabase primeiro
+    const supabaseCommunities = await supabaseBackend.getCommunities();
+    const comm = supabaseCommunities.find(c => c.id === data?.id) || communities[data?.id];
+    socket.emit('community:by-id-response', { community: comm || null });
+  });
+
+  socket.on('community:suggest', async (data) => {
+    if (data?.community) {
+      // Salva no Supabase
+      await supabaseBackend.createCommunity({
+        id: data.community.id,
+        name: data.community.name,
+        description: data.community.description,
+        iconUrl: data.community.iconUrl,
+        bannerUrl: data.community.bannerUrl,
+        createdBy: data.community.createdBy,
+        memberCount: data.community.memberCount
+      });
+      
+      communities[data.community.id] = data.community;
+      io.emit('suggested:new', data.community);
+    }
+  });
+
+  socket.on('community:unsuggest', async (data) => {
+    const communityId = data?.id || data?.communityId;
+    if (communityId) {
+      await supabaseBackend.deleteCommunity(communityId);
+      delete communities[communityId];
+      io.emit('suggested:removed', { id: communityId, communityId });
+    }
+  });
+
+  // Adicionar comunidade nas sugeridas e propagar para todos
+  socket.on('community:add-suggested', async (data) => {
+    if (data && data.id && data.name) {
+      // Salva no Supabase
+      await supabaseBackend.createCommunity({
+        id: data.id,
+        name: data.name,
+        description: data.description || '',
+        iconUrl: data.icon || '',
+        bannerUrl: data.banner || '',
+        createdBy: users[socket.id]?.username || '',
+        memberCount: data.members || 0
+      }).catch(() => {});
+      communities[data.id] = data;
+      io.emit('suggested:new', data);
+    }
+    // Retorna a lista completa atualizada
+    const supabaseCommunities = await supabaseBackend.getCommunities();
+    const allCommunities = { ...communities };
+    supabaseCommunities.forEach(c => {
+      allCommunities[c.id] = { id: c.id, name: c.name, icon: c.icon_url || '', banner: c.banner_url || '', members: c.member_count || 0, description: c.description || '' };
+    });
+    socket.emit('suggested:communities', Object.values(allCommunities));
+  });
+
+  // Buscar lista de comunidades sugeridas (sem adicionar)
+  socket.on('community:get-suggested', async () => {
+    const supabaseCommunities = await supabaseBackend.getCommunities();
+    const allCommunities = { ...communities };
+    supabaseCommunities.forEach(c => {
+      allCommunities[c.id] = { id: c.id, name: c.name, icon: c.icon_url || '', banner: c.banner_url || '', members: c.member_count || 0, description: c.description || '' };
+    });
+    socket.emit('suggested:communities', Object.values(allCommunities));
+  });
+
+  // ── Servidores ───────────────────────────────────────────────────────────────
+  socket.on('server:create', async (data) => {
+    if (data?.server) {
+      // Salva no Supabase
+      await supabaseBackend.createServer({
+        id: data.server.id,
+        name: data.server.name,
+        description: data.server.description,
+        iconUrl: data.server.iconUrl,
+        owner: data.server.owner,
+        memberCount: data.server.memberCount
+      });
+      
+      socket.emit('server:created', data.server);
+    }
+  });
+
+  socket.on('server:list', async (data) => {
+    const dbServers = await supabaseBackend.getServers();
+    // Normaliza campos para o formato esperado pelo front-end
+    const normalized = dbServers.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description || '',
+      icon: s.icon_url || '',
+      owner: s.owner || '',
+      members: s.member_count || 0,
+      created_at: s.created_at
+    }));
+    socket.emit('server:list', normalized);
+  });
+
+  socket.on('server:update', async (data) => {
+    if (data?.id && data?.updates) {
+      await supabaseBackend.updateServer(data.id, data.updates);
+      socket.emit('server:updated', { id: data.id, updates: data.updates });
+    }
+  });
+
+  socket.on('server:delete', async (data) => {
+    if (data?.id) {
+      await supabaseBackend.deleteServer(data.id);
+      socket.emit('server:deleted', { id: data.id });
+    }
+  });
+
+  // ── Canais de Servidor ───────────────────────────────────────────────────────
+  socket.on('server:channel:create', async (data) => {
+    if (data?.channel) {
+      await supabaseBackend.createServerChannel({
+        id: data.channel.id,
+        serverId: data.channel.serverId,
+        name: data.channel.name,
+        type: data.channel.type || 'text',
+        description: data.channel.description
+      });
+      socket.emit('server:channel:created', data.channel);
+    }
+  });
+
+  socket.on('server:channel:list', async (data) => {
+    if (data?.serverId) {
+      const channels = await supabaseBackend.getServerChannels(data.serverId);
+      socket.emit('server:channel:list', channels);
+    }
+  });
+
+  socket.on('server:channel:delete', async (data) => {
+    if (data?.id) {
+      await supabaseBackend.deleteServerChannel(data.id);
+      socket.emit('server:channel:deleted', { id: data.id });
+    }
+  });
+
+  // ── Shorts ────────────────────────────────────────────────────────────────
+  socket.on('shorts:request', async () => {
+    // Carrega shorts do Supabase e mescla com memória
+    const supabaseShorts = await supabaseBackend.getShorts();
+    const allShorts = [...shorts];
+    supabaseShorts.forEach(s => {
+      if (!allShorts.find(existing => existing.id === s.id)) {
+        allShorts.push({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          fileUrl: s.file_url,
+          fileType: s.file_type,
+          username: s.username,
+          tags: s.tags,
+          timestamp: new Date(s.created_at).getTime()
+        });
       }
-      return null;
-    }
-    
-    const comment = findComment(post.comments);
-    if (!comment) return;
-    
-    const uid = socket.id;
-    const prev = comment.votes[uid] || 0;
-    const next = vote === prev ? 0 : vote;
-    comment.score += next - prev;
-    if (next === 0) delete comment.votes[uid];
-    else comment.votes[uid] = next;
-    
-    io.to(`post:${postId}`).emit('comment:updated', { commentId, score: comment.score });
+    });
+    // Ordena por timestamp e pega os últimos 50
+    allShorts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const recentShorts = allShorts.slice(0, 50);
+    // Emite ambos os eventos: 'shorts:history' (index.html) e 'shorts:list' (compat)
+    socket.emit('shorts:history', recentShorts);
+    socket.emit('shorts:list', recentShorts);
   });
 
-  socket.on('voice:join', ({ channelId, communityId, username }) => {
-    const key = communityId ? `${communityId}:${channelId}` : channelId;
-    socket.voiceRoom = key;
-    socket.voiceUsername = username || socket.username || 'Anônimo';
-    if (!voiceRooms[key]) voiceRooms[key] = [];
-    const peers = voiceRooms[key].filter(u => u.socketId !== socket.id);
-    socket.emit('voice:peers', { peers });
-    voiceRooms[key].push({ socketId: socket.id, username: socket.voiceUsername });
-    const allUsers = voiceRooms[key];
-    io.to(key).emit('voice:room-users', { users: allUsers });
-    socket.join(key);
-    socket.to(key).emit('voice:user-joined', { socketId: socket.id, username: socket.voiceUsername });
-  });
-
-  socket.on('voice:leave', ({ channelId, communityId }) => {
-    const key = socket.voiceRoom;
-    if (!key) return;
-    if (voiceRooms[key]) {
-      voiceRooms[key] = voiceRooms[key].filter(u => u.socketId !== socket.id);
-      if (voiceRooms[key].length === 0) delete voiceRooms[key];
-    }
-    socket.to(key).emit('voice:user-left', { socketId: socket.id });
-    io.to(key).emit('voice:room-users', { users: voiceRooms[key] || [] });
-    socket.leave(key);
-    socket.voiceRoom = null;
-  });
-
-  socket.on('voice:offer', ({ to, offer }) => {
-    io.to(to).emit('voice:offer', { from: socket.id, offer, username: socket.voiceUsername });
-  });
-
-  socket.on('voice:answer', ({ to, answer }) => {
-    io.to(to).emit('voice:answer', { from: socket.id, answer });
-  });
-
-  socket.on('voice:ice', ({ to, candidate }) => {
-    io.to(to).emit('voice:ice', { from: socket.id, candidate });
-  });
-
-  // ==============================
-  // SISTEMA DE DIÁRIO
-  // ==============================
-  socket.on('diary:save', ({ entry }) => {
-    if (!socket.username) return;
-    
-    if (!diaryEntries[socket.username]) {
-      diaryEntries[socket.username] = [];
-    }
-
-    const existingIndex = diaryEntries[socket.username].findIndex(e => e.id === entry.id);
-    
-    if (existingIndex >= 0) {
-      // Atualizar entrada existente
-      entry.updatedAt = Date.now();
-      diaryEntries[socket.username][existingIndex] = entry;
-    } else {
-      // Nova entrada
-      entry.id = `diary_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-      entry.userId = socket.username;
-      entry.createdAt = Date.now();
-      entry.updatedAt = Date.now();
-      diaryEntries[socket.username].push(entry);
-    }
-
-    saveData();
-    socket.emit('diary:saved', { entry });
-  });
-
-  socket.on('diary:delete', ({ entryId }) => {
-    if (!socket.username || !diaryEntries[socket.username]) return;
-    
-    diaryEntries[socket.username] = diaryEntries[socket.username].filter(e => e.id !== entryId);
-    saveData();
-    socket.emit('diary:deleted', { entryId });
-  });
-
-  // ==============================
-  // SISTEMA DE SHORTS / REELS
-  // ==============================
-  socket.on('short:create', (shortData) => {
-    const short = {
-      id: `short_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-      title: String(shortData.title || '').trim().slice(0, 100),
-      description: String(shortData.description || '').trim().slice(0, 500),
-      tags: String(shortData.tags || '').trim().slice(0, 150),
-      fileType: String(shortData.fileType || ''),
-      fileUrl: String(shortData.fileUrl || ''),
-      username: socket.username || shortData.username || 'Anônimo',
-      timestamp: shortData.timestamp || Date.now(),
-      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  socket.on('short:create', async (data) => {
+    const uname = data.username || users[socket.id]?.username || 'Anônimo';
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const s = { 
+      ...data, 
+      id: Date.now() + '_' + Math.random().toString(36).slice(2), 
+      timestamp: Date.now(), 
+      username: uname, 
+      time 
     };
-
-    if (!short.title || !short.fileUrl) return;
-
-    shorts.push(short);
-    if (shorts.length > SHORTS_MAX) shorts.shift();
-    saveData();
-
-    // Enviar para TODOS os usuários conectados
-    io.emit('short:new', short);
-  });
-
-  socket.on('short:delete', ({ shortId }) => {
-    const shortIndex = shorts.findIndex(s => s.id === shortId);
-    if (shortIndex === -1) return;
-
-    const short = shorts[shortIndex];
     
-    // Apenas o autor pode deletar
-    if (short.username !== socket.username) {
-      socket.emit('short:error', { message: 'Você não tem permissão para deletar este Short' });
-      return;
-    }
-
-    shorts.splice(shortIndex, 1);
-    saveData();
-
-    // Avisar TODOS os usuários para remover o Short
-    io.emit('short:removed', { shortId });
+    // Salva na memória
+    shorts.push(s);
+    
+    // Salva no Supabase
+    await supabaseBackend.createShort({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      fileUrl: s.fileUrl,
+      fileType: s.fileType || 'image',
+      username: s.username,
+      tags: s.tags || []
+    });
+    
+    // Emite 'short:new' (esperado pelo index.html) e 'short:update' (compat)
+    io.emit('short:new', s);
+    io.emit('short:update', s);
   });
+
+  socket.on('short:delete', (data) => {
+    const shortId = data.shortId || data.id;
+    const idx = shorts.findIndex(s => s.id === shortId);
+    if (idx !== -1) shorts.splice(idx, 1);
+    // Emite 'short:removed' (esperado pelo index.html) e 'short:delete' (compat)
+    io.emit('short:removed', { shortId });
+    io.emit('short:delete', { id: shortId });
+  });
+
+  // ── Notificações ──────────────────────────────────────────────────────────
+  socket.on('notification:mark-read', (data) => {
+    socket.emit('notification:mark-read', { id: data?.id });
+  });
+  socket.on('notification:mark-all-read', () => {
+    socket.emit('notification:mark-all-read', {});
+  });
+
+  // ── Desconexão ────────────────────────────────────────────────────────────
+
+  // ── SALA DE VOZ PRIVADA DM ──────────────────────────────────
+  socket.on('dm:voice-room:join', ({ roomKey, username, toUser, avatar } = {}) => {
+    if (!roomKey) return;
+    const room = 'dm-voice-room:' + roomKey;
+    const uname = username || users[socket.id]?.username || 'Anonimo';
+    // Salva username no socket para uso posterior
+    socket.username = uname;
+    if (!dmVoiceRooms[roomKey]) dmVoiceRooms[roomKey] = [];
+    dmVoiceRooms[roomKey] = dmVoiceRooms[roomKey].filter(u => u.socketId !== socket.id);
+    const peers = dmVoiceRooms[roomKey].map(u => u.socketId);
+    dmVoiceRooms[roomKey].push({ socketId: socket.id, username: uname, avatar: avatar || null });
+    socket.dmVoiceRoom = room; socket.dmVoiceRoomKey = roomKey;
+    socket.join(room);
+    socket.emit('dm:voice-room:peers', { peers, roomKey });
+    socket.to(room).emit('dm:voice-room:user-joined', { socketId: socket.id, username: uname, roomKey });
+    console.log('[VOICE-ROOM] ' + uname + ' entrou em ' + roomKey + ' | toUser=' + toUser);
+    console.log('[VOICE-ROOM] peers na sala:', peers);
+    if (toUser) {
+      const targetSocket = Object.entries(users).find(([, u]) =>
+        u.username?.toLowerCase() === toUser.toLowerCase()
+      );
+      console.log('[VOICE-ROOM] notificando toUser=' + toUser + ' sid=' + (targetSocket ? targetSocket[0] : 'NAO ENCONTRADO'));
+      console.log('[VOICE-ROOM] usuarios online:', Object.values(users).map(u => u.username));
+      if (targetSocket) {
+        io.to(targetSocket[0]).emit('dm:voice-room:notification', { from: uname, roomKey, action: 'joined' });
+        console.log('[VOICE-ROOM] notificacao enviada para', targetSocket[0]);
+      } else {
+        console.log('[VOICE-ROOM] ERRO: toUser "' + toUser + '" nao encontrado - heartbeat enviado?');
+      }
+    }
+    io.to(room).emit('dm:voice-room:users', { users: dmVoiceRooms[roomKey], roomKey });
+  });
+  socket.on('dm:voice-room:leave', ({ roomKey: rk } = {}) => {
+    const key = rk || socket.dmVoiceRoomKey, room = 'dm-voice-room:' + key;
+    if (!key) return;
+    if (dmVoiceRooms[key]) { dmVoiceRooms[key] = dmVoiceRooms[key].filter(u => u.socketId !== socket.id); if (!dmVoiceRooms[key].length) delete dmVoiceRooms[key]; }
+    socket.to(room).emit('dm:voice-room:user-left', { socketId: socket.id, username: socket.username, roomKey: key });
+    io.to(room).emit('dm:voice-room:users', { users: dmVoiceRooms[key] || [], roomKey: key });
+    socket.leave(room); socket.dmVoiceRoom = null; socket.dmVoiceRoomKey = null;
+  });
+  socket.on('dm:voice-room:offer',  ({ to, offer,     roomKey } = {}) => { if (to && offer)      io.to(to).emit('dm:voice-room:offer',  { from: socket.id, offer,     username: socket.username, roomKey }); });
+  socket.on('dm:voice-room:answer', ({ to, answer,    roomKey } = {}) => { if (to && answer)     io.to(to).emit('dm:voice-room:answer', { from: socket.id, answer,    roomKey }); });
+  socket.on('dm:voice-room:ice',    ({ to, candidate, roomKey } = {}) => { if (to && candidate)  io.to(to).emit('dm:voice-room:ice',    { from: socket.id, candidate, roomKey }); });
 
   socket.on('disconnect', () => {
-    if (socket.voiceRoom) {
-      const key = socket.voiceRoom;
-      if (voiceRooms[key]) {
-        voiceRooms[key] = voiceRooms[key].filter(u => u.socketId !== socket.id);
-        if (voiceRooms[key].length === 0) delete voiceRooms[key];
-      }
-      socket.to(key).emit('voice:user-left', { socketId: socket.id });
-      io.to(key).emit('voice:room-users', { users: voiceRooms[key] || [] });
+    const user = users[socket.id];
+    if (user?.voiceRoom && voiceRooms[user.voiceRoom]) {
+      voiceRooms[user.voiceRoom] = voiceRooms[user.voiceRoom].filter(u => u.socketId !== socket.id);
+      io.emit('voice:room-users', {
+        room: user.voiceRoom,
+        users: voiceRooms[user.voiceRoom]
+      });
     }
-    if (socket.username && socket.currentChannel) {
-      const room = roomKey(socket.communityId, socket.currentChannel);
-      io.to(room).emit('system', `${socket.username} saiu do servidor`);
+    if (user?.username) {
+      io.emit('friend:status', { username: user.username, status: 'offline' });
     }
-    if (socket.username) {
-      delete onlineUsers[socket.username];
-      broadcastPresence();
-    }
-    console.log(`Usuário desconectado: ${socket.id}`);
+    delete users[socket.id];
+    console.log('[SERVER] Desconectado:', socket.id);
   });
 });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
-  if (process.send) process.send('ready');
+// ─── Rota raiz ────────────────────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.sendFile(path.join(APP_DIR, 'public', 'index.html'));
 });
+
+// ─── Iniciar servidor ────────────────────────────────────────────────────────
+function startListen(port) {
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`✅ Servidor ZX rodando em http://localhost:${port}`);
+    if (process.send) process.send({ type: 'ready', port });
+  });
+}
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`⚠️  Porta ${PORT} ocupada, tentando porta ${PORT + 1}...`);
+    startListen(PORT + 1);
+  } else {
+    throw err;
+  }
+});
+
+startListen(PORT);
+
+process.on('SIGINT',  () => { server.close(); process.exit(0); });
+process.on('SIGTERM', () => { server.close(); process.exit(0); });
