@@ -9573,14 +9573,22 @@ document.addEventListener('click', function(e) {
 
   // ── 3. FUNÇÃO QUE OBTÉM O DESTINATÁRIO E ENVIA ──
   function sendCurrentDm() {
-    const input = document.getElementById('dm-message-input');
+    // Busca o input DM visivel - pode haver multiplos #dm-message-input no DOM
+    // (um no sidebar HTML estatico e outro injetado dinamicamente no modal)
+    let input = null;
+    document.querySelectorAll('#dm-message-input').forEach(function(el) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) input = el;
+    });
+    if (!input) input = document.getElementById('dm-message-input');
+
     if (!input) {
-      console.warn('[DM-SEND] Input não encontrado');
+      console.warn('[DM-SEND] Input nao encontrado');
       return;
     }
     const text = input.value.trim();
     if (!text) {
-      console.log('[DM-SEND] Mensagem vazia');
+      console.log('[DM-SEND] Mensagem vazia - mas nenhum input visivel tinha conteudo');
       return;
     }
 
@@ -9594,14 +9602,23 @@ document.addEventListener('click', function(e) {
       return;
     }
 
-    // Chama a função de envio
+    // Sincroniza o valor nos outros inputs DM para que sendDmMessage() leia corretamente
+    document.querySelectorAll('#dm-message-input').forEach(function(el) {
+      if (el !== input) el.value = text;
+    });
+
+    // Chama a funcao de envio
     if (typeof window.sendDmMessage === 'function') {
       window.sendDmMessage(text, activeUser);
     } else {
-      console.error('[DM-SEND] Nenhuma função de envio disponível');
+      console.error('[DM-SEND] Nenhuma funcao de envio disponivel');
     }
 
-    input.value = '';
+    // Limpa todos os inputs DM apos envio
+    document.querySelectorAll('#dm-message-input').forEach(function(el) {
+      el.value = '';
+      if (el.tagName === 'TEXTAREA') el.style.height = '40px';
+    });
     input.focus();
   }
 
