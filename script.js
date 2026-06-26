@@ -3,8 +3,7 @@ const isElectron = typeof window !== 'undefined' && window.process && window.pro
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const isFileProtocol = window.location.protocol === 'file:';
 
-// Electron e localhost sempre usam o servidor remoto para Socket.IO
-// (para que todos os usuarios se comuniquem pelo mesmo servidor)
+// Usa servidor remoto para comunicação entre usuários
 const socketUrl = 'https://sagile-xenon.onrender.com';
 
 // Guard: verificar se io está disponível
@@ -1050,29 +1049,42 @@ function _clearDmPending(text, timestamp) {
   });
 }
 
-document.getElementById('dm-send-btn')?.addEventListener('click', sendDmMessage);
-document.getElementById('dm-message-input')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+// Event delegation para capturar cliques no botão de enviar DM (funciona com elementos dinâmicos)
+document.addEventListener('click', function(e) {
+  const sendBtn = e.target.closest('#dm-send-btn');
+  if (sendBtn) {
     e.preventDefault();
     sendDmMessage();
   }
 });
-document.getElementById('dm-message-input')?.addEventListener('input', function() {
-  const counter = document.getElementById('dm-char-counter');
-  const limit = 4000;
-  const length = this.value.length;
-  if (counter) {
-    counter.textContent = `${length}/${limit}`;
-    counter.style.color = length > limit ? '#ff4444' : '#888';
+
+// Event delegation para capturar keydown no input de mensagem DM (funciona com elementos dinâmicos)
+document.addEventListener('keydown', function(e) {
+  if (e.target.id === 'dm-message-input' && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendDmMessage();
   }
-  const sendBtn = document.getElementById('dm-send-btn');
-  if (sendBtn) {
-    sendBtn.disabled = length > limit;
-    sendBtn.style.opacity = length > limit ? '0.5' : '1';
-    sendBtn.style.cursor = length > limit ? 'not-allowed' : 'pointer';
+});
+
+// Event delegation para capturar input no campo de mensagem DM (funciona com elementos dinâmicos)
+document.addEventListener('input', function(e) {
+  if (e.target.id === 'dm-message-input') {
+    const counter = document.getElementById('dm-char-counter');
+    const limit = 4000;
+    const length = e.target.value.length;
+    if (counter) {
+      counter.textContent = `${length}/${limit}`;
+      counter.style.color = length > limit ? '#ff4444' : '#888';
+    }
+    const sendBtn = document.getElementById('dm-send-btn');
+    if (sendBtn) {
+      sendBtn.disabled = length > limit;
+      sendBtn.style.opacity = length > limit ? '0.5' : '1';
+      sendBtn.style.cursor = length > limit ? 'not-allowed' : 'pointer';
+    }
+    e.target.style.height = '40px';
+    e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
   }
-  this.style.height = '40px';
-  this.style.height = Math.min(this.scrollHeight, 150) + 'px';
 });
 
 // ── Listener de dm:message — registrado como função nomeada para re-uso no connect ──
