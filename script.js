@@ -3,11 +3,7 @@ const isElectron = typeof window !== 'undefined' && window.process && window.pro
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const isFileProtocol = window.location.protocol === 'file:';
 
-// SEMPRE usa o servidor do Render para funcionar globalmente
-// Removida a lógica de localhost para garantir que todos os usuários conectam ao mesmo servidor
-console.log('[SOCKET DEBUG] isElectron:', isElectron);
-console.log('[SOCKET DEBUG] isLocalhost:', isLocalhost);
-console.log('[SOCKET DEBUG] isFileProtocol:', isFileProtocol);
+// Usa servidor remoto para comunicação entre usuários
 const socketUrl = 'https://sagile-xenon.onrender.com';
 
 // Guard: verificar se io está disponível
@@ -188,7 +184,6 @@ let profileId = localStorage.getItem('zx_profile_id') || `zx_${Date.now().toStri
 localStorage.setItem('zx_profile_id', profileId);
 
 let profileAvatarUrl = localStorage.getItem('zx_avatar') || '';
-window.profileAvatarUrl = profileAvatarUrl; // Exportar para outros scripts
 let profileBannerUrl = localStorage.getItem('zx_banner') || '';
 let profileBio = localStorage.getItem('zx_bio') || '';
 let profileStatus = localStorage.getItem('zx_status') || '';
@@ -412,7 +407,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Aplicar avatar vindo do servidor (a fonte de verdade é o banco Neon)
     if (account.avatar) {
       profileAvatarUrl = account.avatar;
-      window.profileAvatarUrl = profileAvatarUrl; // Manter sincronizado
       localStorage.setItem('zx_avatar', account.avatar);
       applyProfileMedia();
     }
@@ -967,10 +961,7 @@ function sendDmMessage() {
   });
   if (!input) input = document.getElementById('dm-message-input');
   const text = input?.value.trim();
-
-  // Sincroniza currentDmUser com window.currentDmUser (setado pelo private-chat-system.js)
-  if (!currentDmUser && window.currentDmUser) currentDmUser = window.currentDmUser;
-
+  
   if (!text || !currentDmUser) return;
 
   // Verificar se socket está conectado antes de enviar
@@ -1058,29 +1049,42 @@ function _clearDmPending(text, timestamp) {
   });
 }
 
-document.getElementById('dm-send-btn')?.addEventListener('click', sendDmMessage);
-document.getElementById('dm-message-input')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+// Event delegation para capturar cliques no botão de enviar DM (funciona com elementos dinâmicos)
+document.addEventListener('click', function(e) {
+  const sendBtn = e.target.closest('#dm-send-btn');
+  if (sendBtn) {
     e.preventDefault();
     sendDmMessage();
   }
 });
-document.getElementById('dm-message-input')?.addEventListener('input', function() {
-  const counter = document.getElementById('dm-char-counter');
-  const limit = 4000;
-  const length = this.value.length;
-  if (counter) {
-    counter.textContent = `${length}/${limit}`;
-    counter.style.color = length > limit ? '#ff4444' : '#888';
+
+// Event delegation para capturar keydown no input de mensagem DM (funciona com elementos dinâmicos)
+document.addEventListener('keydown', function(e) {
+  if (e.target.id === 'dm-message-input' && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendDmMessage();
   }
-  const sendBtn = document.getElementById('dm-send-btn');
-  if (sendBtn) {
-    sendBtn.disabled = length > limit;
-    sendBtn.style.opacity = length > limit ? '0.5' : '1';
-    sendBtn.style.cursor = length > limit ? 'not-allowed' : 'pointer';
+});
+
+// Event delegation para capturar input no campo de mensagem DM (funciona com elementos dinâmicos)
+document.addEventListener('input', function(e) {
+  if (e.target.id === 'dm-message-input') {
+    const counter = document.getElementById('dm-char-counter');
+    const limit = 4000;
+    const length = e.target.value.length;
+    if (counter) {
+      counter.textContent = `${length}/${limit}`;
+      counter.style.color = length > limit ? '#ff4444' : '#888';
+    }
+    const sendBtn = document.getElementById('dm-send-btn');
+    if (sendBtn) {
+      sendBtn.disabled = length > limit;
+      sendBtn.style.opacity = length > limit ? '0.5' : '1';
+      sendBtn.style.cursor = length > limit ? 'not-allowed' : 'pointer';
+    }
+    e.target.style.height = '40px';
+    e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
   }
-  this.style.height = '40px';
-  this.style.height = Math.min(this.scrollHeight, 150) + 'px';
 });
 
 // ── Listener de dm:message — registrado como função nomeada para re-uso no connect ──
@@ -1348,18 +1352,14 @@ dmTabPower.addEventListener('click', () => {
 
 function updateUserUI() {
   window.username = username;
-  window.currentUsername = username;
-  window.currentUserNick = username;
   if (!username) return;
   const letter = (username[0] || 'U').toUpperCase();
   if (userAvatar) userAvatar.className = `profile-avatar av-${letter}`;
   if (userNameDisplay) userNameDisplay.textContent = username;
   const profileNameBig = document.getElementById('profile-name-big');
   const profileAvatarBig = document.getElementById('profile-avatar-big');
-  const profileUsernameAt = document.getElementById('profile-username-at');
   if (profileNameBig) profileNameBig.textContent = username;
   if (profileAvatarBig) profileAvatarBig.className = `profile-avatar profile-avatar-big av-${letter}`;
-  if (profileUsernameAt) profileUsernameAt.textContent = '@' + username;
   const statusEl = document.getElementById('profile-status-text');
   const bioEl = document.getElementById('pf-bio');
   if (statusEl && profileStatus) statusEl.textContent = profileStatus;
@@ -1646,7 +1646,9 @@ function restoreDiscoverWelcome() {
       </div>
     </div>`;
 
-  // SugeridasManager gerencia sua própria renderização via socket events
+  if (window.SugeridasManager?.renderizar) {
+    window.SugeridasManager.renderizar();
+  }
   if (typeof window.renderUserCommunities === 'function') {
     window.renderUserCommunities();
   }
@@ -1950,13 +1952,13 @@ function openChannel(ch) {
     document.getElementById('forum-channel-name').textContent = ch.name;
     showLayout('forum-view');
     renderForumTopics(ch.id);
-    window.socket?.emit('switch-channel', { serverId: currentServerId, channel: ch.id });
+    window.socket?.emit('switch-channel', { channel: ch.id, communityId: currentServerId });
   } else if (ch.type === 'announcement') {
     document.getElementById('ann-channel-name').textContent = ch.name;
     showLayout('announcement-view');
     annMessagesArea.innerHTML = '';
     lastMessageUser = null;
-    window.socket?.emit('switch-channel', { serverId: currentServerId, channel: ch.id });
+    window.socket?.emit('switch-channel', { channel: ch.id, communityId: currentServerId });
   } else {
     const prefix = ch.type === 'announcement' ? '🔔' : '#';
     chatChPrefix.textContent = prefix;
@@ -1965,7 +1967,7 @@ function openChannel(ch) {
     messageInput.placeholder = `MENSAGEM EM #${ch.name}...`;
     messagesArea.innerHTML = '';
     showLayout('chat-view');
-    window.socket?.emit('switch-channel', { serverId: currentServerId, channel: ch.id });
+    window.socket?.emit('switch-channel', { channel: ch.id, communityId: currentServerId });
     messageInput.focus();
   }
 
@@ -3187,7 +3189,6 @@ inputAvatar?.addEventListener('change', (e) => {
   if (!file) return;
   readImageFile(file, (dataUrl) => {
     profileAvatarUrl = dataUrl;
-    window.profileAvatarUrl = profileAvatarUrl; // Manter sincronizado
     localStorage.setItem('zx_avatar', dataUrl);
     applyProfileMedia();
     showToast('Foto de perfil atualizada!');
@@ -4506,13 +4507,7 @@ function sendMessage() {
   const text = messageInput.value.trim();
   if (!text || !currentChannel) return;
   console.log('[DEBUG] sendMessage() =>', { currentServerId, currentChannel, text });
-  window.socket?.emit('message', {
-    channel: currentChannel,
-    text,
-    communityId: currentServerId,
-    username: username || window.currentUsername || localStorage.getItem('zx_username') || 'Usuário',
-    avatar: profileAvatarUrl || localStorage.getItem('zx_avatar') || null
-  });
+  window.socket?.emit('message', { channel: currentChannel, text, communityId: currentServerId });
   
   // Integração Discord: envia mensagem também para o webhook configurado
   const server = getCurrentServer();
@@ -4551,7 +4546,7 @@ const annBtn = document.getElementById('ann-btn');
 function sendAnnouncement() {
   const text = annInput.value.trim();
   if (!text || !currentChannel) return;
-  window.socket?.emit('message', { channel: currentChannel, text: `📢 ${text}`, communityId: currentServerId, username: username || window.currentUsername || localStorage.getItem('zx_username') || 'Usuário', avatar: profileAvatarUrl || localStorage.getItem('zx_avatar') || null });
+  window.socket?.emit('message', { channel: currentChannel, text: `📢 ${text}`, communityId: currentServerId });
   annInput.value = '';
 }
 
@@ -5479,17 +5474,26 @@ window.socket?.on('feed:commented', ({ postId, comment }) => {
 // ✅ SISTEMA DE MENSAGENS DO SERVIDOR
 // ================================================
 
-// Listener de histórico REMOVIDO - duplicado com o listener principal na linha 6695
-// O listener principal em script.js (linha 6695) usa renderMessage() que é mais completo
-// window.socket?.on('history', (msgs) => { ... renderServerMessage ... });
+// Listener para histórico de mensagens do servidor
+window.socket?.on('history', (msgs) => {
+  console.log('[SERVER HISTORY] Recebido', msgs?.length || 0, 'mensagens');
+  const area = document.getElementById('messages-area');
+  if (!area) return;
+  area.innerHTML = '';
+  (msgs || []).forEach(msg => {
+    if (msg && msg.username && msg.username !== 'Usuário') {
+      renderServerMessage(msg);
+    }
+  });
+});
 
-// Listener de mensagem removido - duplicado com o listener principal na linha 6701
-// window.socket?.on('message', (msg) => {
-//   console.log('[SERVER MESSAGE] Nova mensagem recebida:', msg);
-//   if (msg && msg.username && msg.username !== 'Usuário') {
-//     renderServerMessage(msg);
-//   }
-// });
+// Listener para novas mensagens do servidor
+window.socket?.on('message', (msg) => {
+  console.log('[SERVER MESSAGE] Nova mensagem recebida:', msg);
+  if (msg && msg.username && msg.username !== 'Usuário') {
+    renderServerMessage(msg);
+  }
+});
 
 // Função para renderizar mensagem do servidor
 function renderServerMessage(msg) {
@@ -5580,8 +5584,10 @@ window.socket?.on('suggested:error', ({ message }) => {
 
 // Função para renderizar as comunidades sugeridas
 function renderSuggestedCommunities() {
-  // SugeridasManager gerencia sua própria renderização via socket events
-  return;
+  if (window.SugeridasManager?.renderizar) {
+    window.SugeridasManager.renderizar();
+    return;
+  }
 
   const container = document.getElementById('suggested-communities-container');
   if (!container) return;
@@ -6702,8 +6708,9 @@ window.socket?.on('history', (msgs) => {
 });
 
 window.socket?.on('message', renderMessage);
-// message:sent REMOVIDO: o servidor não emite mais este evento para evitar duplicação
-// (o remetente já recebe a mensagem via io.to(room).emit que inclui o próprio socket)
+window.socket?.on('message:sent', ({ message: msg }) => {
+  if (msg) renderMessage(msg);
+});
 window.socket?.on('system', renderSystem);
 
 // ✅ REMOVIDO: window.socket?.on('message', debug) que causava chamada dupla
@@ -6721,11 +6728,10 @@ function renderMessage(msg) {
     div.className = `message${grouped ? ' grouped' : ''}`;
     const safeUsername = sender;
     const initial = safeUsername.charAt(0).toUpperCase();
-    const currentUser = username || window.currentUsername || localStorage.getItem('zx_username') || '';
-    const isSelf = currentUser && sender && sender.toLowerCase() === currentUser.toLowerCase();
+    const isSelf = sender === username;
     const _senderKey = (sender || '').toLowerCase();
     const avatarUrl = isSelf
-      ? (profileAvatarUrl || localStorage.getItem('zx_avatar') || resolveAvatarUrl(currentUser) || '')
+      ? resolveAvatarUrl(username)
       : (msg?.avatar || getFriendAvatar(sender) || '');
     if (!isSelf && !avatarUrl) requestUserAvatar(sender);
     const avatarStyle = avatarUrl ? ` style="background-image:url(${avatarUrl})" class="has-image"` : '';
@@ -6747,7 +6753,7 @@ function renderMessage(msg) {
       <div class="msg-body">
         <div class="msg-meta">
           <span class="msg-username">${escHtml(safeUsername)}</span>
-          <span class="msg-time">${msg?.time || (msg?.timestamp ? new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}))}</span>
+          <span class="msg-time">${msg?.time || ''}</span>
         </div>
         <div class="msg-text">${parsedText}</div>
       </div>
@@ -8055,7 +8061,7 @@ async function loadGifs(search = '') {
     ).join('')}</div>`;
     container.querySelectorAll('.gif-item').forEach(item => {
       item.addEventListener('click', () => {
-        window.socket?.emit('message', { channel: currentChannel, text: item.dataset.url, communityId: currentServerId, username: username || window.currentUsername || localStorage.getItem('zx_username') || 'Usuário', avatar: profileAvatarUrl || localStorage.getItem('zx_avatar') || null });
+        window.socket?.emit('message', { channel: currentChannel, text: item.dataset.url, communityId: currentServerId });
         closeAllPickers();
       });
     });
@@ -8082,7 +8088,7 @@ function renderStickerPack(packId) {
   container.innerHTML = `<div class="sticker-grid">${pack.stickers.map(s => `<button class="sticker-item">${s}</button>`).join('')}</div>`;
   container.querySelectorAll('.sticker-item').forEach(btn => {
     btn.addEventListener('click', () => {
-      window.socket?.emit('message', { channel: currentChannel, text: btn.textContent, communityId: currentServerId, username: username || window.currentUsername || localStorage.getItem('zx_username') || 'Usuário', avatar: profileAvatarUrl || localStorage.getItem('zx_avatar') || null });
+      window.socket?.emit('message', { channel: currentChannel, text: btn.textContent, communityId: currentServerId });
       closeAllPickers();
     });
   });
@@ -8185,10 +8191,8 @@ btnPlus?.addEventListener('click', (e) => {
 
                   window.socket?.emit('message', { 
                     channel: currentChannel, 
-                    text: '🔍 **ENQUETE**: ' + question.trim() + '\n\n' + options.map(function(o, i) { return (i+1) + '. ' + o; }).join('\n'), 
-                    communityId: currentServerId,
-                    username: username || window.currentUsername || localStorage.getItem('zx_username') || 'Usuário',
-                    avatar: profileAvatarUrl || localStorage.getItem('zx_avatar') || null
+                    text: '🔍 **ENQUETE**: ' + question.trim() + '\\n\\n' + options.map(function(o, i) { return (i+1) + '. ' + o; }).join('\\n'), 
+                    communityId: currentServerId 
                   });
 
                   this.closest('.modal-overlay').remove();
@@ -8247,9 +8251,7 @@ btnPlus?.addEventListener('click', (e) => {
                   window.socket?.emit('message', { 
                     channel: currentChannel, 
                     text: messageText, 
-                    communityId: currentServerId,
-                    username: username || window.currentUsername || localStorage.getItem('zx_username') || 'Usuário',
-                    avatar: profileAvatarUrl || localStorage.getItem('zx_avatar') || null
+                    communityId: currentServerId 
                   });
 
                   this.closest('.modal-overlay').remove();
@@ -8286,7 +8288,7 @@ fileUploadInput?.addEventListener('change', (e) => {
       const isVideo = file.type.startsWith('video/');
       const isAudio = file.type.startsWith('audio/');
       const content = isImage ? `![${file.name}](${reader.result})` : isVideo ? `🎬 [${file.name}](${reader.result})` : isAudio ? `🎬 [${file.name}](${reader.result})` : `🎬 [${file.name}](${reader.result})`;
-      window.socket?.emit('message', { channel: currentChannel, text: content, communityId: currentServerId, username: username || window.currentUsername || localStorage.getItem('zx_username') || 'Usuário', avatar: profileAvatarUrl || localStorage.getItem('zx_avatar') || null });
+      window.socket?.emit('message', { channel: currentChannel, text: content, communityId: currentServerId });
       showToast(`? ${file.name} anexado!`);
     };
     reader.readAsDataURL(file);
@@ -8820,7 +8822,6 @@ function openRolePermissionsModal(role, server) {
     // Descobre com quem estamos conversando
     const header = document.querySelector('.chat-header .dm-username') ||
                    document.querySelector('.chat-header .pcb-title') ||
-                   document.querySelector('#pcs-username-el') ||
                    document.querySelector('.dm-username');
     if (!header) return;
 
@@ -9544,7 +9545,6 @@ document.addEventListener('click', function(e) {
     // Tenta obter do cabeçalho
     const header = document.querySelector('.chat-header .dm-username') ||
                    document.querySelector('.chat-header .pcb-title') ||
-                   document.querySelector('#pcs-username-el') ||
                    document.querySelector('.dm-username');
     if (header) {
       const username = header.textContent.trim();
@@ -9608,7 +9608,7 @@ document.addEventListener('click', function(e) {
     ensureActiveChat();
 
     const chatArea = document.getElementById('dm-chat-area');
-    const activeUser = chatArea?.dataset.activeChat || window.currentDmUser;
+    const activeUser = chatArea?.dataset.activeChat;
     if (!activeUser) {
       console.warn('[DM-SEND] Nenhum chat ativo');
       return;
