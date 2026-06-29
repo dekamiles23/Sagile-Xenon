@@ -1,5 +1,8 @@
 ﻿// Detecta se está em Electron, localhost ou produção
-const isElectron = typeof window !== 'undefined' && window.process && (window.process.type === 'renderer' || window.process.versions && window.process.versions.electron);
+const isElectron = typeof window !== 'undefined' && (
+  (window.process && (window.process.type === 'renderer' || (window.process.versions && window.process.versions.electron))) ||
+  navigator.userAgent.toLowerCase().indexOf('electron') > -1
+);
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const isFileProtocol = window.location.protocol === 'file:';
 
