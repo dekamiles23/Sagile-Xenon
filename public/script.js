@@ -1,14 +1,7 @@
-﻿// Detecta se está em Electron, localhost ou produção
-const isElectron = typeof window !== 'undefined' && window.process && window.process.type === 'renderer';
-const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const isFileProtocol = window.location.protocol === 'file:';
-
-// Em desenvolvimento/Electron/localhost, usa o servidor local
-// Em produção (acesso via URL público), usa o servidor do Render
-console.log('[SOCKET DEBUG] isElectron:', isElectron);
-console.log('[SOCKET DEBUG] isLocalhost:', isLocalhost);
-console.log('[SOCKET DEBUG] isFileProtocol:', isFileProtocol);
-const socketUrl = (isFileProtocol || isLocalhost) ? 'http://localhost:3002' : 'https://sagile-xenon.onrender.com';
+﻿// SEMPRE usa o servidor do Render para funcionamento global
+// Todos os usuários conectam ao mesmo servidor público
+const socketUrl = 'https://sagile-xenon.onrender.com';
+console.log('[SOCKET DEBUG] Conectando ao servidor global:', socketUrl);
 
 // Guard: verificar se io está disponível
 if (typeof io === 'undefined') {
