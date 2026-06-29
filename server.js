@@ -5,6 +5,10 @@ const _dotenvPath = process.env.APP_DIR
 try { require('dotenv').config({ path: _dotenvPath }); } catch(e) { console.warn('[SERVER] dotenv não disponível'); }
 
 // Pasta persistente de dados do usuario (nao apagada em atualizacoes)
+console.log('========================================');
+console.log('[SERVER] Iniciando servidor...');
+console.log('========================================');
+
 const USER_DATA_DIR = process.env.USER_DATA_DIR || __dirname;
 
 const express = require('express');
@@ -14,8 +18,17 @@ const path = require('path');
 const fs = require('fs');
 let migrations; try { migrations = require('./migrations'); } catch(e) { migrations = null; }
 let database; try { database = require('./database'); } catch(e) { database = null; }
-const accounts = require('./accounts');
-let supabaseBackend; try { supabaseBackend = require('./supabase-backend'); } catch(e) { console.log('[SERVER] Supabase backend não disponível'); supabaseBackend = null; }
+let accounts; try { accounts = require('./accounts'); } catch(e) { accounts = null; }
+let supabaseBackend;
+try {
+  console.log('[DEBUG] Carregando supabase-backend...');
+  supabaseBackend = require('./supabase-backend');
+  console.log('[DEBUG] supabase-backend carregado com sucesso');
+} catch(e) {
+  console.error('[DEBUG] Erro ao carregar supabase-backend:', e.message);
+  console.error('[DEBUG] Erro completo:', e);
+  supabaseBackend = null;
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -30,7 +43,7 @@ const io = new Server(server, {
   pingInterval: 25000,
   transports: ['polling', 'websocket'],
   upgradeTimeout: 30000,
-  maxHttpBufferSize: 1e6
+  maxHttpBufferSize: 1e7
 });
 
 app.use(express.json({ limit: '1mb' }));
@@ -52,6 +65,7 @@ app.get('/api/health/database', async (req, res) => {
 });
 
 app.post('/api/auth/register', async (req, res) => {
+  if (!accounts) return res.status(503).json({ error: 'Accounts module not available' });
   try {
     const result = await accounts.registerAccount(req.body || {});
     res.status(201).json(result);
@@ -61,6 +75,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
+  if (!accounts) return res.status(503).json({ error: 'Accounts module not available' });
   try {
     const result = await accounts.loginAccount(req.body || {});
     res.json(result);
@@ -69,11 +84,12 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/account/me', accounts.authMiddleware, (req, res) => {
+app.get('/api/account/me', accounts ? accounts.authMiddleware : ((req, res, next) => next()), (req, res) => {
   res.json({ account: req.authAccount });
 });
 
-app.patch('/api/account', accounts.authMiddleware, async (req, res) => {
+app.patch('/api/account', accounts ? accounts.authMiddleware : ((req, res, next) => next()), async (req, res) => {
+  if (!accounts) return res.status(503).json({ error: 'Accounts module not available' });
   try {
     const oldNick = req.authAccount.nick;
     const result = await accounts.updateAccount(req.authToken, req.body || {});
@@ -89,12 +105,14 @@ app.patch('/api/account', accounts.authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/account/logout', accounts.authMiddleware, async (req, res) => {
+app.post('/api/account/logout', accounts ? accounts.authMiddleware : ((req, res, next) => next()), async (req, res) => {
+  if (!accounts) return res.status(503).json({ error: 'Accounts module not available' });
   await accounts.logoutAccount(req.authToken);
   res.json({ ok: true });
 });
 
-app.delete('/api/account', accounts.authMiddleware, async (req, res) => {
+app.delete('/api/account', accounts ? accounts.authMiddleware : ((req, res, next) => next()), async (req, res) => {
+  if (!accounts) return res.status(503).json({ error: 'Accounts module not available' });
   try {
     const deleted = await accounts.deleteAccount(req.authToken, req.body?.password);
     purgeUserData(deleted.nick);
@@ -225,51 +243,8 @@ const friendRequests = savedData.friendRequests || {}; // { usuario: [solicitant
 const friends = savedData.friends || {}; // { usuario: [amigos] }
 const diaryEntries = savedData.diaryEntries || {}; // { usuario: [entradas] }
 const shorts = savedData.shorts || []; // Lista global de Shorts / Reels
-
-// ✅ Carregar shorts do Supabase ao iniciar
-async function loadShortsFromSupabase() {
-  if (!supabaseBackend) {
-    console.log('[SERVER] Supabase backend não disponível, pulando carregamento de shorts');
-    return;
-  }
-  try {
-    console.log('[SERVER] Carregando shorts do Supabase...');
-    const supabaseShorts = await supabaseBackend.getShorts();
-    if (supabaseShorts && supabaseShorts.length > 0) {
-      // Mesclar shorts do Supabase com os do arquivo JSON (prioridade para Supabase)
-      const existingIds = new Set(shorts.map(s => s.id));
-      let addedCount = 0;
-      supabaseShorts.forEach(s => {
-        if (!existingIds.has(s.id)) {
-          shorts.push({
-            id: s.id,
-            title: s.title || '',
-            description: s.description || '',
-            tags: s.tags || '',
-            fileType: s.file_type || '',
-            fileUrl: s.file_url || '',
-            username: s.username || 'Anônimo',
-            timestamp: s.created_at ? new Date(s.created_at).getTime() : Date.now(),
-            time: s.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-          });
-          existingIds.add(s.id);
-          addedCount++;
-        }
-      });
-      if (addedCount > 0) {
-        saveData();
-        console.log(`✅ Carregados ${addedCount} shorts do Supabase`);
-      } else {
-        console.log('✅ Shorts do Supabase já sincronizados');
-      }
-    } else {
-      console.log('ℹ️ Nenhum short encontrado no Supabase');
-    }
-  } catch (err) {
-    console.error('❌ Erro ao carregar shorts do Supabase:', err.message);
-  }
-}
-const suggestedCommunities = savedData.suggestedCommunities || []; // ✅ Comunidades sugeridas GLOBAIS
+let suggestedCommunities = savedData.suggestedCommunities || []; // ✅ Comunidades sugeridas GLOBAIS (carregadas do Supabase)
+let suggestedCommunitiesLoaded = false; // Flag para indicar quando o carregamento está completo
 const communityRequests = savedData.communityRequests || []; // ✅ Comunidades pendentes de aprovação
 const userCommunities = savedData.userCommunities || {}; // ✅ Comunidades por usuário
 // ✅ BANIMENTOS E CASTIGOS
@@ -335,6 +310,48 @@ function loadStaffList() {
   savedData.staffList = [...staffUsers];
 }
 loadStaffList();
+
+// Carregar comunidades sugeridas do Supabase ao iniciar
+async function loadSuggestedCommunitiesFromSupabase() {
+  console.log('[DEBUG] loadSuggestedCommunitiesFromSupabase() iniciada');
+  try {
+    console.log('[DEBUG] Verificando se supabaseBackend está disponível...');
+    if (!supabaseBackend) {
+      console.error('[DEBUG] supabaseBackend não está disponível');
+      suggestedCommunities = savedData.suggestedCommunities || [];
+      return;
+    }
+    console.log('[DEBUG] Iniciando carregamento de comunidades sugeridas do Supabase...');
+    const communities = await supabaseBackend.getSuggestedCommunities();
+    console.log('[DEBUG] Comunidades recebidas do Supabase:', communities);
+    if (communities && communities.length > 0) {
+      suggestedCommunities = communities;
+      console.log(`[SUPABASE] ${communities.length} comunidades sugeridas carregadas do banco de dados`);
+      console.log('[SUPABASE] IDs das comunidades:', communities.map(c => c.id));
+    } else {
+      console.log('[SUPABASE] Nenhuma comunidade sugerida encontrada no banco');
+    }
+    suggestedCommunitiesLoaded = true;
+  } catch (err) {
+    console.error('[SUPABASE] Erro ao carregar comunidades sugeridas:', err.message);
+    console.error('[SUPABASE] Erro completo:', err);
+    console.error('[SUPABASE] Stack:', err.stack);
+    // Fallback para data.json se Supabase falhar
+    suggestedCommunities = savedData.suggestedCommunities || [];
+    suggestedCommunitiesLoaded = true;
+  }
+}
+
+// Chamar a função de carregamento e aguardar antes de iniciar o Socket.IO
+console.log('[DEBUG] Chamando loadSuggestedCommunitiesFromSupabase()...');
+loadSuggestedCommunitiesFromSupabase().then(() => {
+  console.log('[DEBUG] Carregamento de comunidades sugeridas concluído');
+  // Enviar a lista para todos os usuários conectados após o carregamento
+  io.emit('suggested:communities', suggestedCommunities);
+  console.log('[DEBUG] Lista de comunidades sugeridas enviada para todos os clientes conectados');
+}).catch(err => {
+  console.error('[DEBUG] Erro ao carregar comunidades sugeridas:', err);
+});
 
 // Função para salvar dados em arquivo
 function saveData() {
@@ -838,8 +855,33 @@ io.on('connection', (socket) => {
       entries: diaryEntries[canonicalUsername] || diaryEntries[username] || []
     });
 
-    // Enviar todos os Shorts salvos
-    socket.emit('shorts:history', shorts.slice(-50).reverse());
+    // Enviar todos os Shorts salvos (carrega do Supabase)
+    try {
+      const supabaseShorts = await supabaseBackend.getShorts();
+      if (supabaseShorts && supabaseShorts.length > 0) {
+        // Atualiza a memória local com dados do Supabase
+        shorts.length = 0;
+        supabaseShorts.forEach(s => {
+          shorts.push({
+            id: s.id,
+            title: s.title,
+            description: s.description,
+            tags: Array.isArray(s.tags) ? s.tags.join(', ') : s.tags,
+            fileType: s.file_type,
+            fileUrl: s.file_url,
+            username: s.username,
+            timestamp: s.created_at ? new Date(s.created_at).getTime() : Date.now(),
+            time: s.created_at ? new Date(s.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''
+          });
+        });
+        saveData();
+      }
+      socket.emit('shorts:history', shorts.slice(-50).reverse());
+    } catch (err) {
+      console.error('❌ Erro ao carregar shorts do Supabase:', err.message);
+      // Fallback para memória local
+      socket.emit('shorts:history', shorts.slice(-50).reverse());
+    }
 
     // Enviar notificações pendentes (não lidas) ao usuário
     // BUG FIX v5: tentar canonical primeiro, cair no username raw como fallback
@@ -867,8 +909,37 @@ io.on('connection', (socket) => {
   });
 
   // ✅ Permite cliente pedir histórico de Shorts a qualquer momento
-  socket.on('shorts:request', () => {
-    socket.emit('shorts:history', shorts.slice(-50).reverse());
+  socket.on('shorts:request', async () => {
+    try {
+      // Tenta carregar do PostgreSQL Neon (tabela reels)
+      if (database && database.query) {
+        const result = await database.query('SELECT * FROM reels ORDER BY created_at DESC LIMIT 50');
+        if (result && result.rows && result.rows.length > 0) {
+          // Atualiza a memória local com dados do PostgreSQL
+          shorts.length = 0;
+          result.rows.forEach(s => {
+            shorts.push({
+              id: s.id,
+              title: s.title,
+              description: s.description,
+              tags: s.tags || '',
+              fileType: s.file_type || 'image',
+              fileUrl: s.file_url,
+              username: s.username,
+              timestamp: s.created_at ? new Date(s.created_at).getTime() : Date.now(),
+              time: s.created_at ? new Date(s.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''
+            });
+          });
+          saveData();
+          console.log('✅ Shorts carregados do PostgreSQL Neon:', result.rows.length);
+        }
+      }
+      socket.emit('shorts:history', shorts.slice(-50).reverse());
+    } catch (err) {
+      console.error('❌ Erro ao carregar shorts do PostgreSQL Neon:', err.message);
+      // Fallback para memória local
+      socket.emit('shorts:history', shorts.slice(-50).reverse());
+    }
   });
 
   // ✅ Recebe lista de servidores do cliente para cálculo de servidores em comum
@@ -1483,6 +1554,11 @@ io.on('connection', (socket) => {
   // SISTEMA DE SHORTS / REELS
   // ==============================
   socket.on('short:create', async (shortData) => {
+    console.log('[SERVER] ===== short:create recebido =====');
+    console.log('[SERVER] Socket ID:', socket.id);
+    console.log('[SERVER] Socket username:', socket.username);
+    console.log('[SERVER] Dados recebidos:', shortData);
+    
     const short = {
       id: `short_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       title: String(shortData.title || '').trim().slice(0, 100),
@@ -1495,39 +1571,39 @@ io.on('connection', (socket) => {
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     };
 
-    if (!short.title || !short.fileUrl) return;
+    console.log('[SERVER] Short criado:', short);
+
+    if (!short.title || !short.fileUrl) {
+      console.log('[SERVER] short:create ignorado - dados inválidos:', short);
+      return;
+    }
 
     // ✅ Salva na memória e no arquivo JSON
     shorts.push(short);
     if (shorts.length > SHORTS_MAX) shorts.shift();
     saveData();
 
-    // ✅ Salva no banco de dados Neon
+    // ✅ Salva no PostgreSQL Neon (tabela reels) para persistência global
+    console.log('[SERVER] Tentando salvar short no PostgreSQL Neon...');
     try {
-      await database.query(
-        `INSERT INTO reels (id, title, description, tags, file_type, file_url, username, time, timestamp)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (id) DO NOTHING`,
-        [short.id, short.title, short.description, short.tags, short.fileType, short.fileUrl, short.username, short.time, short.timestamp]
-      );
-      console.log('✅ Short salvo no Neon:', short.id);
-    } catch (err) {
-      console.error('❌ Erro ao salvar short no Neon:', err.message);
-    }
-
-    // ✅ Salva no Supabase (sincronização)
-    if (supabaseBackend) {
-      try {
-        await supabaseBackend.createShort(short);
-        console.log('✅ Short salvo no Supabase:', short.id);
-      } catch (err) {
-        console.error('❌ Erro ao salvar short no Supabase:', err.message);
+      if (database && database.query) {
+        await database.query(
+          'INSERT INTO reels (id, title, description, file_url, file_type, username, tags, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO UPDATE SET title = $2, description = $3, file_url = $4, file_type = $5, tags = $6',
+          [short.id, short.title, short.description, short.fileUrl, short.fileType, short.username, short.tags, new Date(short.timestamp).toISOString()]
+        );
+        console.log('✅ Short salvo no PostgreSQL Neon:', short.id);
+      } else {
+        console.log('⚠️ Database não disponível, short não salvo no PostgreSQL');
       }
-    } else {
-      console.log('⚠️ Supabase backend não disponível, short não salvo no Supabase');
+    } catch (err) {
+      console.error('❌ Erro ao salvar short no PostgreSQL Neon:', err.message);
     }
 
     // ✅ Envia em tempo real para TODOS os usuários conectados
+    console.log('[SERVER] Emitindo short:new para todos os clientes:', short.id);
     io.emit('short:new', short);
+    socket.emit('short:created', { success: true, id: short.id });
+    console.log('[SERVER] ===== short:create finalizado =====');
   });
 
   socket.on('short:delete', async ({ shortId }) => {
@@ -1535,7 +1611,7 @@ io.on('connection', (socket) => {
     if (shortIndex === -1) return;
 
     const short = shorts[shortIndex];
-    
+
     // Apenas o autor pode deletar
     if (short.username !== socket.username) {
       socket.emit('short:error', { message: 'Você não tem permissão para deletar este Short' });
@@ -1545,121 +1621,112 @@ io.on('connection', (socket) => {
     shorts.splice(shortIndex, 1);
     saveData();
 
-    // ✅ Remove do banco de dados Neon
+    // ✅ Remove do Supabase
     try {
-      await database.query('DELETE FROM reels WHERE id = $1', [shortId]);
-      console.log('✅ Short removido do Neon:', shortId);
+      await supabaseBackend.deleteShort(shortId);
+      console.log('✅ Short removido do Supabase:', shortId);
     } catch (err) {
-      console.error('❌ Erro ao remover short do Neon:', err.message);
-    }
-
-    // ✅ Remove do Supabase (sincronização)
-    if (supabaseBackend) {
-      try {
-        await supabaseBackend.deleteShort(shortId);
-        console.log('✅ Short removido do Supabase:', shortId);
-      } catch (err) {
-        console.error('❌ Erro ao remover short do Supabase:', err.message);
-      }
-    } else {
-      console.log('⚠️ Supabase backend não disponível, short não removido do Supabase');
+      console.error('❌ Erro ao remover short do Supabase:', err.message);
     }
 
     // Avisar TODOS os usuários para remover o Short
     io.emit('short:removed', { shortId });
   });
 
-  socket.on('short:edit', async ({ shortId, title, description, tags }) => {
-    const short = shorts.find(s => s.id === shortId);
-    if (!short) return;
-
-    // Apenas o autor pode editar
-    if (short.username !== socket.username) {
-      socket.emit('short:error', { message: 'Você não tem permissão para editar este Short' });
-      return;
-    }
-
-    // Atualizar dados
-    if (title) short.title = String(title).trim().slice(0, 100);
-    if (description !== undefined) short.description = String(description).trim().slice(0, 500);
-    if (tags !== undefined) short.tags = String(tags).trim().slice(0, 150);
-
-    saveData();
-
-    // Atualizar no banco de dados Neon
-    try {
-      await database.query(
-        `UPDATE reels SET title = $1, description = $2, tags = $3 WHERE id = $4`,
-        [short.title, short.description, short.tags, shortId]
-      );
-      console.log('✅ Short atualizado no Neon:', shortId);
-    } catch (err) {
-      console.error('❌ Erro ao atualizar short no Neon:', err.message);
-    }
-
-    // ✅ Atualiza no Supabase (sincronização)
-    if (supabaseBackend && supabaseBackend.supabase) {
-      try {
-        const { error } = await supabaseBackend.supabase
-          .from('shorts')
-          .update({ title: short.title, description: short.description, tags: short.tags })
-          .eq('id', shortId);
-        if (error) throw error;
-        console.log('✅ Short atualizado no Supabase:', shortId);
-      } catch (err) {
-        console.error('❌ Erro ao atualizar short no Supabase:', err.message);
-      }
-    } else {
-      console.log('⚠️ Supabase backend não disponível, short não atualizado no Supabase');
-    }
-
-    // Avisar TODOS os usuários sobre a atualização
-    io.emit('short:updated', { shortId, title: short.title, description: short.description, tags: short.tags });
-  });
-
   // ==============================================
   // ✅ SISTEMA DE COMUNIDADES SUGERIDAS GLOBAL
   // ==============================================
-  
+
   // Enviar lista de sugeridas quando o usuário conectar
+  console.log('[DEBUG] Verificando se comunidades sugeridas foram carregadas:', suggestedCommunitiesLoaded);
+  console.log('[DEBUG] Enviando lista de comunidades sugeridas para socket:', socket.id);
+  console.log('[DEBUG] Quantidade de comunidades sugeridas:', suggestedCommunities.length);
+  console.log('[DEBUG] IDs das comunidades sugeridas:', suggestedCommunities.map(c => c.id));
   socket.emit('suggested:communities', suggestedCommunities);
+  console.log('[DEBUG] Lista de comunidades sugeridas enviada');
 
   // Quando alguém adicionar uma comunidade às sugeridas
-  socket.on('community:add-suggested', (community) => {
-    // Qualquer usuário logado pode sugerir suas próprias comunidades
-    if (!socket.username) {
-      socket.emit('suggested:error', { message: 'Faça login para sugerir comunidades.' });
-      return;
+  socket.on('community:add-suggested', async (community) => {
+    try {
+      console.log('[DEBUG] community:add-suggested recebido:', community);
+      console.log('[DEBUG] socket.username:', socket.username);
+      console.log('[DEBUG] socket.id:', socket.id);
+      console.log('[DEBUG] socket.connected:', socket.connected);
+
+      // Qualquer usuário logado pode sugerir suas próprias comunidades
+      if (!socket.username) {
+        console.log('[DEBUG] Usuário não logado');
+        socket.emit('suggested:error', { message: 'Faça login para sugerir comunidades.' });
+        return;
+      }
+
+      // Verificar se já existe
+      const exists = suggestedCommunities.find(c => c.id === community.id);
+      if (exists) {
+        console.log('[DEBUG] Comunidade já existe:', community.id);
+        console.log('[DEBUG] Lista atual de sugeridas:', suggestedCommunities.map(c => c.id));
+        console.log('[DEBUG] Enviando suggested:exists para socket:', socket.id);
+        socket.emit('suggested:exists', { community });
+        console.log('[DEBUG] Enviando suggested:updated para socket:', socket.id);
+        socket.emit('suggested:updated', community); // Envia confirmação mesmo se já existe
+        console.log('[DEBUG] Eventos enviados para socket');
+        return;
+      }
+
+      // Adicionar na lista global
+      community.addedBy = socket.username;
+      community.addedAt = Date.now();
+      suggestedCommunities.push(community);
+      console.log('[DEBUG] Comunidade adicionada à lista local:', community.name);
+      console.log('[DEBUG] Lista atual de sugeridas após adicionar:', suggestedCommunities.map(c => c.id));
+
+      // Salvar no Supabase (persistência global)
+      try {
+        console.log('[DEBUG] Tentando salvar no Supabase...');
+        const result = await supabaseBackend.addSuggestedCommunity(community);
+        console.log(`[SUPABASE] Comunidade "${community.name}" adicionada às sugeridas por ${socket.username}`);
+        console.log('[SUPABASE] Resultado do salvamento:', result);
+      } catch (err) {
+        console.error('[SUPABASE] Erro ao salvar comunidade sugerida:', err.message);
+        console.error('[SUPABASE] Erro completo:', err);
+        // Não retorna erro para o usuário, apenas loga - continua com lista local
+      }
+
+      // Enviar para TODOS os usuários conectados
+      console.log('[DEBUG] Emitindo eventos para todos os clientes');
+      console.log('[DEBUG] io.emit suggested:new');
+      io.emit('suggested:new', community);
+      console.log('[DEBUG] io.emit suggested:updated');
+      io.emit('suggested:updated', community);
+      console.log('[DEBUG] Eventos emitidos com sucesso');
+    } catch (err) {
+      console.error('[ERROR] Erro no handler community:add-suggested:', err);
+      console.error('[ERROR] Stack:', err.stack);
+      socket.emit('suggested:error', { message: 'Erro ao processar comunidade sugerida.' });
     }
+  });
 
-    // Verificar se já existe
-    const exists = suggestedCommunities.find(c => c.id === community.id);
-    if (exists) {
-      socket.emit('suggested:exists', { community });
-      return;
-    }
-
-    // Adicionar na lista global
-    community.addedBy = socket.username;
-    community.addedAt = Date.now();
-    suggestedCommunities.push(community);
-    
-    // Salvar no arquivo
-    savedData.suggestedCommunities = suggestedCommunities;
-    saveData();
-
-    // Enviar para TODOS os usuários conectados
-    io.emit('suggested:new', community);
+  // Cliente solicita lista de comunidades sugeridas
+  socket.on('community:get-suggested', () => {
+    console.log('[DEBUG] community:get-suggested recebido de socket:', socket.id);
+    console.log('[DEBUG] Enviando lista de comunidades sugeridas:', suggestedCommunities.length);
+    socket.emit('suggested:communities', suggestedCommunities);
   });
 
   // Remover comunidade das sugeridas
-  socket.on('community:unsuggest', ({ communityId }) => {
+  socket.on('community:unsuggest', async ({ communityId }) => {
     const index = suggestedCommunities.findIndex(c => c.id === communityId);
     if (index === -1) return;
 
     suggestedCommunities.splice(index, 1);
-    savedData.suggestedCommunities = suggestedCommunities;
-    saveData();
+
+    // Remover do Supabase (persistência global)
+    try {
+      await supabaseBackend.removeSuggestedCommunity(communityId);
+      console.log(`[SUPABASE] Comunidade ${communityId} removida das sugeridas`);
+    } catch (err) {
+      console.error('[SUPABASE] Erro ao remover comunidade sugerida:', err.message);
+    }
 
     // Avisar todos para remover
     io.emit('suggested:removed', { communityId });
@@ -1718,7 +1785,7 @@ io.on('connection', (socket) => {
   });
 
   // Staff aprova comunidade
-  socket.on('community:approve', ({ communityId }) => {
+  socket.on('community:approve', async ({ communityId }) => {
     // Verificar se é staff
     if (!staffUsers.includes(socket.username)) {
       socket.emit('community:permission-denied');
@@ -1735,12 +1802,19 @@ io.on('connection', (socket) => {
 
     // Adicionar nas comunidades sugeridas GLOBAIS
     suggestedCommunities.push(community);
-    
+
+    // Salvar no Supabase (persistência global)
+    try {
+      await supabaseBackend.addSuggestedCommunity(community);
+      console.log(`[SUPABASE] Comunidade "${community.name}" aprovada e adicionada às sugeridas por ${socket.username}`);
+    } catch (err) {
+      console.error('[SUPABASE] Erro ao salvar comunidade aprovada:', err.message);
+    }
+
     // Remover da fila de aprovação
     communityRequests.splice(requestIndex, 1);
-    
+
     savedData.communityRequests = communityRequests;
-    savedData.suggestedCommunities = suggestedCommunities;
     saveData();
 
     // ✅ ENVIAR PARA TODOS OS USUÁRIOS CONECTADOS
@@ -2076,10 +2150,6 @@ server.on('error', (err) => {
 server.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
   if (process.send) process.send({ type: 'ready', port: PORT });
-  
-  // ✅ Carregar shorts do Supabase após o servidor iniciar
-  loadShortsFromSupabase();
-  
   // ── BUG FIX v5: rodar inicialização do DB de forma SEQUENCIAL
   // Antes rodavam em paralelo (fire-and-forget) causando race condition:
   // migrations.createTables e initFriendRequestsTable competiam pelo DROP+CREATE
