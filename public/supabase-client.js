@@ -3,7 +3,11 @@
 // ================================================
 
 const SUPABASE_URL = 'https://mescdtlvpqblhlqtvnlm.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJtZXNjZHRsdnBxYmxobHF0dm5sbSIsInJlZiI6InFwRWZSbGRNUE1rUGNrVkMtcFVJcF9uV05HeUU5TnEiLCJpYXQiOjE3MTk1MjQ4NDQsImV4cCI6MjAzNTA5MDg0NH0.sb_secret_GEsYmczQKJip2Ejvj7N06A_WFHHjXRq';
+// ⚠️ Aqui deve ir a ANON KEY pública do Supabase (Project Settings → API → anon/public key),
+// que é segura para expor no navegador — NUNCA a service_role/secret key.
+// O valor anterior estava corrompido (tinha a chave secreta colada por engano)
+// e precisa ser substituído pela anon key real do seu projeto.
+const SUPABASE_ANON_KEY = 'COLE_AQUI_A_ANON_KEY_PUBLICA_DO_SUPABASE';
 
 // Criar cliente Supabase
 let supabaseClient = null;
@@ -24,7 +28,7 @@ try {
 
 // Função auxiliar para obter o username atual
 function getCurrentUsername() {
-  return window.username || window.currentUsername || localStorage.getItem('username') || 'anonymous';
+  return window.username || window.currentUsername || localStorage.getItem('zx_username') || localStorage.getItem('username') || '';
 }
 
 // ================================================
@@ -162,7 +166,7 @@ async function saveTypewriterEntry(entry) {
   }
   
   try {
-    const username = window.username || window.currentUsername || 'anonymous';
+    const username = window.username || window.currentUsername || localStorage.getItem('zx_username') || localStorage.getItem('username') || '';
     
     const { data, error } = await supabaseClient
       .from('typewriter_saves')
@@ -194,7 +198,7 @@ async function loadTypewriterEntries() {
   }
   
   try {
-    const username = window.username || window.currentUsername || 'anonymous';
+    const username = window.username || window.currentUsername || localStorage.getItem('zx_username') || localStorage.getItem('username') || '';
     
     const { data, error } = await supabaseClient
       .from('typewriter_saves')

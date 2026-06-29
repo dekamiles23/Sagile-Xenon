@@ -17,7 +17,6 @@
 
   /* ── fonte da verdade em memória ──────────────────────────────── */
   var _shortsData    = [];
-  var _file          = null;
   var _historyLoaded = false;
 
   function getSocket() { return window.socket || null; }
@@ -41,22 +40,72 @@
   var CONTAINER_STYLE =
     'display:grid;grid-template-columns:1fr 1fr;gap:10px;' +
     'align-items:start;align-content:start;' +
-    'height:calc(100vh - 180px);overflow-y:auto;padding:4px 8px 8px;';
+    'height:calc(100vh - 180px);overflow-y:auto;padding:4px 8px 8px;' +
+    'scrollbar-width:thin;scrollbar-color:#00ffff #1a1a2e;';
 
   function getOrCreateContainer() {
     var c = document.getElementById('shorts-container');
-    if (c) { c.style.cssText = CONTAINER_STYLE; return c; }
+    if (c) { 
+      console.log('[SHORTS-FIX] Container existente encontrado');
+      c.style.cssText = CONTAINER_STYLE; 
+      return c; 
+    }
     var panel = document.getElementById('discover-right-content');
-    if (!panel) { warn('discover-right-content ausente'); return null; }
+    if (!panel) { 
+      warn('discover-right-content ausente'); 
+      console.log('[SHORTS-FIX] discover-right-content ausente');
+      return null; 
+    }
+    console.log('[SHORTS-FIX] discover-right-content encontrado, innerHTML length:', panel.innerHTML.length);
+    console.log('[SHORTS-FIX] discover-right-content HTML:', panel.innerHTML.substring(0, 200));
+    // Não sobrescreve o innerHTML se já tiver conteúdo
+    if (panel.innerHTML.trim() !== '') {
+      console.log('[SHORTS-FIX] discover-right-content tem conteúdo, criando estrutura completa');
+      // Cria a estrutura completa com título antes do container
+      panel.innerHTML = '';
+      var header = document.createElement('div');
+      header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 12px;';
+      header.innerHTML = '<h3 style="color:#00ffff;font-size:14px;font-weight:700;margin:0;">📱 SHORTS / REELS</h3><button id="shorts-create-btn" style="background:var(--neon,#00ffff);border:none;border-radius:6px;padding:6px 10px;color:#0a0a1a;font-size:11px;font-weight:600;cursor:pointer;">+ CRIAR</button>';
+      panel.appendChild(header);
+      
+      c = document.createElement('div');
+      c.id = 'shorts-container';
+      c.style.cssText = CONTAINER_STYLE;
+      panel.appendChild(c);
+      
+      // Anexar handler ao botão
+      var btn = document.getElementById('shorts-create-btn');
+      if (btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          window.openShortModal();
+        });
+      }
+      
+      console.log('[SHORTS-FIX] Estrutura completa criada com título antes do container');
+      return c;
+    }
+    console.log('[SHORTS-FIX] discover-right-content vazio, criando estrutura completa');
     panel.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;' +
       'margin-bottom:12px;padding:0 12px;">' +
         '<h3 style="color:#00ffff;font-size:14px;font-weight:700;margin:0;">📱 SHORTS / REELS</h3>' +
-        '<button onclick="window.openShortModal()" style="background:var(--neon,#00ffff);' +
+        '<button id="shorts-create-btn" style="background:var(--neon,#00ffff);' +
         'border:none;border-radius:6px;padding:6px 10px;color:#0a0a1a;' +
         'font-size:11px;font-weight:600;cursor:pointer;">+ CRIAR</button>' +
       '</div>' +
       '<div id="shorts-container" style="' + CONTAINER_STYLE + '"></div>';
+    
+    // Anexar handler ao botão
+    var btn = document.getElementById('shorts-create-btn');
+    if (btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        window.openShortModal();
+      });
+    }
+    
+    console.log('[SHORTS-FIX] Estrutura completa criada');
     return document.getElementById('shorts-container');
   }
 
@@ -79,9 +128,29 @@
     if (empty) empty.remove();
     if (!_shortsData.length) { showEmpty(c); return; }
     _shortsData.forEach(function (d) {
-      if (!c.querySelector('[data-short-id="' + d.id + '"]')) c.appendChild(buildCard(d));
+      if (!c.querySelector('[data-short-id="' + d.id + '"]')) {
+        var card = buildCard(d);
+        c.appendChild(card);
+        console.log('[SHORTS-FIX] Card criado para', d.id, 'com fileUrl:', d.fileUrl);
+      }
     });
+    
     log('renderAll: ' + _shortsData.length + ' cards');
+    console.log('[SHORTS-FIX] Container ID:', c.id);
+    console.log('[SHORTS-FIX] Container innerHTML length:', c.innerHTML.length);
+    console.log('[SHORTS-FIX] Container children:', c.children.length);
+    console.log('[SHORTS-FIX] Cards no DOM:', c.querySelectorAll('[data-short-id]').length);
+    
+    // Verificar primeiro card
+    var firstCard = c.querySelector('[data-short-id]');
+    if (firstCard) {
+      console.log('[SHORTS-FIX] Primeiro card HTML:', firstCard.innerHTML.substring(0, 200));
+      var img = firstCard.querySelector('img');
+      if (img) {
+        console.log('[SHORTS-FIX] Imagem no card src:', img.src);
+        console.log('[SHORTS-FIX] Imagem carregada:', img.complete);
+      }
+    }
   }
 
   function prependCard(data) {
@@ -729,6 +798,9 @@
     });
 
     sock.on('short:new', function (d) {
+      console.log('[SHORTS-FIX] short:new recebido:', d);
+      console.log('[SHORTS-FIX] Socket ID:', sock.id);
+      console.log('[SHORTS-FIX] Socket connected:', sock.connected);
       log('short:new id=' + d.id);
       upsertShort(d, true);
       prependCard(d);
@@ -759,9 +831,35 @@
     var original = window.setHomeSidebar;
     window.setHomeSidebar = function () {
       log('setHomeSidebar called (mem=' + _shortsData.length + ')');
+      
+      // Salvar cards existentes antes de chamar a função original
+      var existingContainer = document.getElementById('shorts-container');
+      var savedCards = [];
+      if (existingContainer) {
+        var cards = existingContainer.querySelectorAll('[data-short-id]');
+        cards.forEach(function(card) {
+          savedCards.push(card.outerHTML);
+        });
+        console.log('[SHORTS-FIX] Salvando', savedCards.length, 'cards antes de setHomeSidebar');
+      }
+      
       if (typeof original === 'function') {
         try { original.call(this); } catch(e) { warn('original lançou: ' + e.message); }
       }
+      
+      // Restaurar cards salvos
+      if (savedCards.length > 0) {
+        var newContainer = document.getElementById('shorts-container');
+        if (newContainer) {
+          savedCards.forEach(function(cardHtml) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = cardHtml;
+            newContainer.appendChild(tempDiv.firstChild);
+          });
+          console.log('[SHORTS-FIX] Restaurados', savedCards.length, 'cards após setHomeSidebar');
+        }
+      }
+      
       setTimeout(function () {
         if (_historyLoaded && _shortsData.length > 0) renderAll();
         else requestHistory(getSocket());
@@ -773,60 +871,16 @@
   /* ═══════════════════════════════════════════════════════════════
    *  PUBLISH HANDLER
    * ═══════════════════════════════════════════════════════════════ */
+  // attachPublishHandler removido - o index.html já gerencia a publicação
   function attachPublishHandler() {
-    var btn = document.getElementById('btn-publish-short');
-    if (!btn) { warn('#btn-publish-short não encontrado'); return; }
-    var fresh = btn.cloneNode(true);
-    btn.parentNode.replaceChild(fresh, btn);
-
-    fresh.addEventListener('click', async function (e) {
-      e.stopImmediatePropagation();
-      var title       = (document.getElementById('short-title')?.value       || '').trim();
-      var description = (document.getElementById('short-description')?.value || '').trim();
-      var tags        = (document.getElementById('short-tags')?.value        || '').trim();
-      var file        = _file || document.getElementById('short-file-input')?.files[0];
-
-      if (!file)  { alert('Selecione um vídeo ou imagem primeiro.'); return; }
-      if (!title) { alert('Digite um título.'); return; }
-
-      fresh.disabled = true; fresh.textContent = '⏳ Enviando...';
-      var btnC = document.getElementById('btn-cancel-short');
-      if (btnC) btnC.disabled = true;
-
-      try {
-        var fd = new FormData(); fd.append('file', file);
-        var resp = await fetch('/api/upload-short', { method: 'POST', body: fd });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        var json = await resp.json();
-        if (!json.fileUrl) throw new Error('Sem fileUrl');
-
-        var sock = getSocket();
-        if (!sock) throw new Error('Socket indisponível');
-
-        sock.emit('short:create', {
-          title: title, description: description, tags: tags,
-          fileType: json.fileType || file.type,
-          fileUrl:  json.fileUrl,
-          username: window.username || window.currentUsername || sessionStorage.getItem('username') || 'Usuário',
-          timestamp: Date.now()
-        });
-
-        resetModal();
-        var modal = document.getElementById('create-short-modal');
-        if (modal) { modal.classList.add('hidden'); modal.removeAttribute('style'); }
-        alert('✅ Short publicado!');
-      } catch (e) {
-        err('publish error:', e.message); alert('❌ Erro: ' + e.message);
-      } finally {
-        fresh.disabled = false; fresh.textContent = '📤 Publicar Short';
-        if (btnC) btnC.disabled = false;
-      }
-    });
-    log('attachPublishHandler ok');
+    // Handler de publicação já existe no index.html, não duplicar
   }
 
   function resetModal() {
-    _file = null;
+    if (window._shortResetModal) {
+      window._shortResetModal();
+      return;
+    }
     ['short-title','short-description','short-tags','short-file-input'].forEach(function (id) {
       var el = document.getElementById(id); if (el) el.value = '';
     });
@@ -836,30 +890,14 @@
     var pi = document.getElementById('short-preview-image');     if (pi) { pi.src=''; pi.classList.add('hidden'); }
   }
 
+  // attachFileHandler removido - o index.html já gerencia _shortFile
   function attachFileHandler() {
-    var inp = document.getElementById('short-file-input'); if (!inp) return;
-    var fresh = inp.cloneNode(true); inp.parentNode.replaceChild(fresh, inp);
-    fresh.addEventListener('change', function (e) {
-      var file = e.target.files[0]; if (!file) return;
-      _file = file;
-      var url = URL.createObjectURL(file);
-      var ua = document.getElementById('short-upload-area');
-      var pc = document.getElementById('short-preview-container');
-      var pv = document.getElementById('short-preview-video');
-      var pi = document.getElementById('short-preview-image');
-      if (file.type.startsWith('video/')) {
-        if (pv) { pv.src=url; pv.classList.remove('hidden'); } if (pi) pi.classList.add('hidden');
-      } else {
-        if (pi) { pi.src=url; pi.classList.remove('hidden'); } if (pv) pv.classList.add('hidden');
-      }
-      if (ua) ua.style.display = 'none'; if (pc) pc.classList.remove('hidden');
-    });
+    // Handler de arquivo já existe no index.html, não duplicar
   }
 
+  // attachRemoveFileHandler removido - o index.html já gerencia isso
   function attachRemoveFileHandler() {
-    var btn = document.getElementById('short-remove-file'); if (!btn) return;
-    var fresh = btn.cloneNode(true); btn.parentNode.replaceChild(fresh, btn);
-    fresh.addEventListener('click', resetModal);
+    // Handler de remove file já existe no index.html, não duplicar
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -878,6 +916,34 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════
+   *  FUNÇÃO GLOBAL openShortModal (garante disponibilidade)
+   * ═══════════════════════════════════════════════════════════════ */
+  window.openShortModal = function() {
+    var m = document.getElementById('create-short-modal');
+    if (!m) {
+      warn('create-short-modal não encontrado');
+      return;
+    }
+    m.removeAttribute('style');
+    m.classList.remove('hidden');
+    m.style.cssText = 'display:flex !important; position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; z-index:999999 !important; background:rgba(0,0,0,0.88) !important; align-items:center !important; justify-content:center !important;';
+    log('openShortModal chamado');
+  };
+
+  window.closeShortModal = function() {
+    var m = document.getElementById('create-short-modal');
+    if (!m) {
+      warn('create-short-modal não encontrado para fechar');
+      return;
+    }
+    m.classList.add('hidden');
+    m.removeAttribute('style');
+    m.style.display = 'none';
+    resetModal();
+    log('closeShortModal chamado');
+  };
+
+  /* ═══════════════════════════════════════════════════════════════
    *  INIT
    * ═══════════════════════════════════════════════════════════════ */
   function init() {
@@ -887,6 +953,31 @@
     attachPublishHandler();
     attachFileHandler();
     attachRemoveFileHandler();
+
+    // Garantir que botões com onclick="window.openShortModal()" funcionem
+    // Adiciona listeners a todos os botões que chamam openShortModal
+    setTimeout(function() {
+      var buttons = document.querySelectorAll('button[onclick*="openShortModal"]');
+      buttons.forEach(function(btn) {
+        // Remove o onclick para evitar conflitos
+        btn.removeAttribute('onclick');
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          window.openShortModal();
+        });
+        log('Listener adicionado ao botão de criar short');
+      });
+      
+      // Garantir que o botão cancelar funciona
+      var btnCancel = document.getElementById('btn-cancel-short');
+      if (btnCancel) {
+        btnCancel.addEventListener('click', function(e) {
+          e.stopPropagation();
+          window.closeShortModal();
+        });
+        log('Listener adicionado ao botão cancelar');
+      }
+    }, 200);
 
     var sock = getSocket();
     if (sock) { registerSocketListeners(sock); requestHistory(sock); }

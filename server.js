@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // FIX: caminho do .env correto dentro do .asar.unpacked
+=======
+﻿// FIX: caminho do .env correto dentro do .asar.unpacked
+>>>>>>> f0c1348f (Fix: Comunidades sugeridas funcionam globalmente)
 const _dotenvPath = process.env.APP_DIR
   ? require('path').join(process.env.APP_DIR, '.env')
   : require('path').join(__dirname, '.env');

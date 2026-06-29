@@ -9,7 +9,8 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
 const fs      = require('fs');
-const sb      = require('./supabase-backend');
+let sb;
+try { sb = require('../supabase-backend'); } catch(e) { sb = require('./supabase-backend'); }
 
 const app  = express();
 const server = http.createServer(app);
@@ -28,6 +29,30 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 app.use(express.static(PUBLIC_DIR));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use(express.json({ limit: '10mb' }));
+
+// ✅ MULTER - Upload de arquivos para Shorts/Reels
+// (rota ausente neste servidor — por isso o POST retornava HTTP 404)
+const multer = require('multer');
+const shortsUploadDir = path.join(__dirname, '..', 'uploads', 'shorts');
+if (!fs.existsSync(shortsUploadDir)) fs.mkdirSync(shortsUploadDir, { recursive: true });
+
+const shortStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, shortsUploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || (file.mimetype.startsWith('video/') ? '.mp4' : '.jpg');
+    cb(null, 'short_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + ext);
+  }
+});
+const shortUpload = multer({
+  storage: shortStorage,
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
+
+app.post('/api/upload-short', shortUpload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+  const fileUrl = '/uploads/shorts/' + req.file.filename;
+  res.json({ ok: true, fileUrl, fileType: req.file.mimetype });
+});
 
 // ─── Estado em memória ───────────────────────────────────────────────────────
 const users          = {};   // socketId -> { username, avatar, status, channel, serverId }
@@ -120,22 +145,29 @@ io.on('connection', (socket) => {
   });
 
   // ── Canal de servidor (chat) ──────────────────────────────────────────────
-  socket.on('switch-channel', (data) => {
-    // Sai do canal anterior
+  socket.on('switch-channel', async (data) => {
     if (users[socket.id]?.room) socket.leave(users[socket.id].room);
     const room = `${data.serverId}:${data.channel}`;
     socket.join(room);
     if (users[socket.id]) {
-      users[socket.id].room    = room;
+      users[socket.id].room = room;
       users[socket.id].channel = data.channel;
       users[socket.id].serverId = data.serverId;
     }
-    // Envia histórico
-    const hist = channelHistory[room] || [];
+    let hist = channelHistory[room] || [];
+    try {
+      if (sb.getServerMessageHistory) {
+        const dbHist = await sb.getServerMessageHistory(data.serverId, data.channel, 100);
+        if (Array.isArray(dbHist) && dbHist.length) {
+          channelHistory[room] = dbHist;
+          hist = dbHist;
+        }
+      }
+    } catch(err) { console.error('[CHAT] Erro ao carregar histórico:', err); }
     socket.emit('history', hist.slice(-100));
   });
 
-  socket.on('message', (data) => {
+  socket.on('message', async (data) => {
     const room = users[socket.id]?.room;
     if (!room) return;
     const msg = {
@@ -150,6 +182,12 @@ io.on('connection', (socket) => {
     if (!channelHistory[room]) channelHistory[room] = [];
     channelHistory[room].push(msg);
     if (channelHistory[room].length > 500) channelHistory[room].shift();
+    try {
+      if (sb.saveServerMessage) {
+        const [serverId, channel] = room.split(':');
+        await sb.saveServerMessage({ ...msg, serverId, channel });
+      }
+    } catch(err) { console.error('[CHAT] Erro ao salvar mensagem:', err); }
     io.to(room).emit('message', msg);
     socket.emit('message:sent', { ...msg, status: 'delivered' });
   });
@@ -489,19 +527,19 @@ io.on('connection', (socket) => {
 
   // ── Shorts ────────────────────────────────────────────────────────────────
   socket.on('shorts:request', () => {
-    socket.emit('shorts:list', shorts.slice(-50));
+    socket.emit('shorts:history', shorts.slice(-50).reverse());
   });
 
   socket.on('short:create', (data) => {
     const s = { ...data, id: Date.now() + '_' + Math.random().toString(36).slice(2), timestamp: Date.now() };
     shorts.push(s);
-    io.emit('short:update', s);
+    io.emit('short:new', s);
   });
 
   socket.on('short:delete', (data) => {
     const idx = shorts.findIndex(s => s.id === data.id);
     if (idx !== -1) shorts.splice(idx, 1);
-    io.emit('short:delete', { id: data.id });
+    io.emit('short:removed', { shortId: data.id });
   });
 
   // ── Notificações ──────────────────────────────────────────────────────────

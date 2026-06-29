@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS communities (
+id text PRIMARY KEY,
+name text,
+description text,
+creator text,
+created_at timestamptz DEFAULT now(),
+data jsonb
+);
+
+CREATE TABLE IF NOT EXISTS community_posts (
+id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+community_id text,
+author text,
+content text,
+created_at timestamptz DEFAULT now(),
+data jsonb
+);

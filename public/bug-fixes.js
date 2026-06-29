@@ -220,13 +220,9 @@
       // Esses listeners já existem em script.js e server-chat.js, causando duplicação
       console.log('✅ bug-fixes.js: listeners de mensagem removidos para evitar duplicação');
 
-      // histórico ao entrar num canal
-      window.socket.on('history', function (msgs) {
-        const area = document.getElementById('messages-area');
-        if (!area) return;
-        area.innerHTML = '';
-        (msgs || []).forEach(m => appendMsg(area, m));
-      });
+      // Listener de histórico REMOVIDO - duplicado com o listener em script.js (linha 6695)
+      // O listener principal usa renderMessage() que suporta avatares e agrupamento
+      console.log('✅ bug-fixes.js: listener de history removido para evitar duplicação');
     });
   }
 
@@ -1003,7 +999,14 @@
       const t = setInterval(() => { if (window.socket) { clearInterval(t); cb(); } }, 150);
     }
     waitForSocket(function() {
-      window.socket.on('message:sent', function() { addXp(10); });
+      // Usa 'message' pois 'message:sent' foi removido do servidor para evitar duplicação
+      // XP é adicionado apenas quando o próprio usuário envia (sender === username)
+      window.socket.on('message', function(msg) {
+        const currentUser = window.username || localStorage.getItem('zx_username') || '';
+        if (msg && msg.username && currentUser && msg.username.toLowerCase() === currentUser.toLowerCase()) {
+          addXp(10);
+        }
+      });
     });
   }
 
@@ -1212,39 +1215,9 @@ function openCommunityContextMenu(community,x,y){
    }
    if(label==='✨ Colocar nas Sugeridas'){
       b.onclick=()=>{
-        const suggestedCommunities=window.suggestedCommunities||[];
-        if(!suggestedCommunities.find(c=>c.id===community.id)){
-          // ✅ Garante que todos os dados da comunidade sejam passados
-          const communityData={
-            id:community.id,
-            name:community.name,
-            description:community.description,
-            banner:community.banner||community.bannerUrl||null,
-            icon:community.icon||community.iconUrl||null,
-            members:community.members||1,
-            category:community.category||'other',
-            createdAt:community.createdAt||Date.now()
-          };
-          console.log('✅ Dados da comunidade sendo adicionada:', communityData);
-
-          if(typeof socket!=='undefined'&&socket){
-            socket.emit('community:add-suggested',communityData);
-            console.log('✅ Comunidade enviada para o servidor:',communityData.name);
-          }
-
-          // ✅ Atualiza window.suggestedCommunities imediatamente
-          window.suggestedCommunities=window.suggestedCommunities||[];
-          window.suggestedCommunities.push(communityData);
-
-          // ✅ Atualiza a lista do SugeridasManager imediatamente
-          if(window.SugeridasManager?.adicionar){
-            window.SugeridasManager.adicionar(communityData);
-          }
-
-          alert(`✅ Comunidade "${communityData.name}" adicionada nas Sugeridas!`);
-        }else{
-          alert(`⚠ Essa comunidade já está nas Sugeridas!`);
-        }
+        // ✅ CORREÇÃO: Removido handler duplicado - usar o handler do index.html
+        // O index.html já gerencia "Colocar nas Sugeridas" via socket events
+        console.log('⚠️ Handler do bug-fixes.js desabilitado - usando handler do index.html');
         m.remove();
       };
    }
@@ -1575,3 +1548,62 @@ setupCommunityGetByIdListener();
 
 // Verificar se usuário é dev/staff e mostrar botão
 setTimeout(showAddManualButtonForDevStaff,1000);
+
+// Fix: re-render suggested communities when returning to home/layout changes
+(function(){
+ async function refreshSuggested(){
+  try{
+   if(window.sugeridasManager && window.sugeridasManager.renderSuggestedCommunities){window.sugeridasManager.renderSuggestedCommunities();}
+   if(window.renderSuggestedCommunities){window.renderSuggestedCommunities();}
+   if(window.socket){ window.socket.emit('community:get-suggested'); }
+  }catch(e){console.error('Suggested refresh error',e);}
+ }
+ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) setTimeout(refreshSuggested,300);});
+ window.addEventListener('focus',()=>setTimeout(refreshSuggested,300));
+ window.refreshSuggestedCommunitiesAfterLayout = refreshSuggested;
+})();
+
+
+// ===== PATCH: Recarregar Comunidades Sugeridas ao voltar para Início =====
+(function(){
+  function reloadSuggested() {
+    setTimeout(() => {
+      try {
+        if (window.socket && window.socket.connected) {
+          window.socket.emit('community:get-suggested');
+        }
+
+        if (window.loadSuggestedCommunities) {
+          window.loadSuggestedCommunities();
+        }
+
+        if (window.renderSuggestedCommunities) {
+          window.renderSuggestedCommunities();
+        }
+
+        const container = document.getElementById('suggested-communities-grid') ||
+                          document.querySelector('.suggested-communities-grid');
+
+        if (container && container.children.length <= 1 && window.socket) {
+          window.socket.emit('community:get-suggested');
+        }
+      } catch(e) {
+        console.error('Erro ao recarregar sugeridas:', e);
+      }
+    }, 250);
+  }
+
+  document.addEventListener('click', (e) => {
+    const homeBtn = e.target.closest('[data-view="discover-view"], .home-btn, #home-btn');
+    if (homeBtn) reloadSuggested();
+  });
+
+  const originalShowLayout = window.showLayout;
+  if (typeof originalShowLayout === 'function') {
+    window.showLayout = function(layoutId) {
+      const result = originalShowLayout.apply(this, arguments);
+      if (layoutId === 'discover-view') reloadSuggested();
+      return result;
+    };
+  }
+})();

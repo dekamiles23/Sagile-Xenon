@@ -699,6 +699,41 @@
     ]
   },
   "diaryEntries": {},
+  "shorts": [
+    {
+      "id": "short_mqx167ax_b9l1g",
+      "title": "dsf",
+      "description": "",
+      "tags": "",
+      "fileType": "image/jpeg",
+      "fileUrl": "/uploads/shorts/short_1782605303642_gbmey.jpg",
+      "username": "MDK",
+      "timestamp": 1782616103672,
+      "time": "00:08"
+    },
+    {
+      "id": "short_mqx10u51_z1xya",
+      "title": "teste 2",
+      "description": "",
+      "tags": "",
+      "fileType": "image/jpeg",
+      "fileUrl": "/uploads/shorts/short_1782605053313_397rj.jpg",
+      "username": "MDK",
+      "timestamp": 1782615853332,
+      "time": "00:04"
+    },
+    {
+      "id": "short_mqmhmldw_07q0i",
+      "title": "Edit foda do homelander",
+      "description": "Uma edit ai",
+      "tags": "the boys, edit",
+      "fileType": "video/mp4",
+      "fileUrl": "https://mescdtlvpqblhlqtvnlm.supabase.co/storage/v1/object/public/Xenon/short_1781967812562_m5c8n.mp4",
+      "username": "Miles Deka",
+      "timestamp": 1781978614552,
+      "time": "15:03"
+    }
+  ],
   "staffList": [
     "admin@exemplo.com",
     "Developer",
@@ -708,5 +743,5 @@
   ],
   "bannedUsers": [],
   "friendsActivityLog": [],
-  "savedAt": "2026-06-25T19:46:24.488Z"
+  "savedAt": "2026-06-28T02:57:51.430Z"
 }

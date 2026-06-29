@@ -7,10 +7,15 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const database = require('./database');
 
-const supabase = createClient(
-  'https://mescdtlvpqblhlqtvnlm.supabase.co',
-  'sb_secret_GEsYmczQKJip2Ejvj7N06A_WFHHjXRq'
-);
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mescdtlvpqblhlqtvnlm.supabase.co';
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+if (!SUPABASE_SECRET_KEY) {
+  console.error('❌ SUPABASE_SERVICE_KEY não definida no .env. Defina-a antes de rodar este script.');
+  process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
 
 const SUPABASE_BUCKET = 'Xenon';
 

@@ -34,7 +34,7 @@ const dmVoiceRooms = {};   // roomKey ("userA|userB") -> [{ socketId, username, 
     if (!roomKey) return;
 
     const room = 'dm-voice-room:' + roomKey;
-    const uname = username || socket.username || 'Anônimo';
+    const uname = username || socket.username || 'Usuário';
 
     // Remove entrada anterior deste socket nesta sala (se houver)
     if (!dmVoiceRooms[roomKey]) dmVoiceRooms[roomKey] = [];

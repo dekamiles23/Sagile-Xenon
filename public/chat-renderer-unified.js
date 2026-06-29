@@ -283,18 +283,12 @@ if (window.__zx_unified_renderer_loaded) {
     waitForSocket(() => {
       console.log('✅ Socket.IO detectado - registrando listeners');
 
-      // Listener de histórico
+      // Listener de histórico REMOVIDO - duplicado com o listener em script.js (linha 6695)
+      // O listener principal usa renderMessage() que suporta avatares e agrupamento
       if (window.socket && typeof window.socket.on === 'function') {
-        window.socket.on('history', (msgs) => {
-          console.log('📥 Histórico recebido:', msgs?.length || 0, 'mensagens');
-          window.ChatRenderer.renderBatch(msgs || []);
-        });
-
-        // Listener de mensagem nova
-        window.socket.on('message', (msg) => {
-          console.log('📩 Mensagem recebida:', msg);
-          window.ChatRenderer.renderMessage(msg);
-        });
+        // window.socket.on('history', ...) REMOVIDO para evitar duplicação
+        console.log('✅ chat-renderer-unified.js: listener de history removido para evitar duplicação');
+        console.log('✅ chat-renderer-unified.js: listener de mensagem removido para evitar duplicação');
 
         // Listener de mensagem de sistema
         window.socket.on('system', (text) => {
